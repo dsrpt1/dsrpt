@@ -1,0 +1,26 @@
+# Node / JS / TS
+node_modules/
+pnpm-lock.yaml
+npm-debug.log*
+yarn-error.log*
+dist/
+build/
+.next/
+out/
+
+# Foundry / Solidity
+cache/
+out/
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
