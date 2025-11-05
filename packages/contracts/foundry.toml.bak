@@ -10,6 +10,3 @@ optimizer = true
 optimizer_runs = 200
 via_ir = true
 solc_version = "0.8.30"
-
-# allow scripts to read files under ./params
-fs_permissions = [{ access = "read", path = "./params" }]

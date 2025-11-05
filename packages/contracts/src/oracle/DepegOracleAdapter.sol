@@ -2,13 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {AggregatorV3Interface} from "../interfaces/AggregatorV3Interface.sol";
+import {IOracle} from "../interfaces/IOracle.sol";
 
-interface AggregatorV3Interface {
-    function latestRoundData() external view returns (uint80,int256,uint256,uint256,uint80);
-    function decimals() external view returns (uint8);
-}
-
-contract DepegOracleAdapter is Ownable {
+contract DepegOracleAdapter is IOracle, Ownable {
     error InvalidThreshold();
     error FeedStale();
     error PriceNotBelowThreshold();
@@ -28,36 +25,38 @@ contract DepegOracleAdapter is Ownable {
     mapping(bytes32 => bool) public resolved;
     mapping(bytes32 => bool) public condition;
 
-    modifier onlyKeeper() {
-        if (msg.sender != keeper) revert NotKeeper();
-        _;
-    }
+    modifier onlyKeeper() { if (msg.sender != keeper) revert NotKeeper(); _; }
 
     constructor(
         AggregatorV3Interface _feed,
-        address _owner,
+        address _initialOwner,
         address _keeper,
         uint256 _threshold1e8,
         uint256 _maxStale
-    ) Ownable(_owner) {
+    ) Ownable(_initialOwner) {
         if (_threshold1e8 == 0 || _threshold1e8 >= 100_000_000) revert InvalidThreshold();
         feed = _feed;
         keeper = _keeper;
         threshold1e8 = _threshold1e8;
         maxStale = _maxStale;
-        emit KeeperUpdated(_keeper);
-        emit ThresholdUpdated(_threshold1e8);
-        emit MaxStaleUpdated(_maxStale);
     }
 
+    // --- admin ---
     function setKeeper(address k) external onlyOwner { keeper = k; emit KeeperUpdated(k); }
-    function setThreshold(uint256 thr) external onlyOwner {
-        if (thr == 0 || thr >= 100_000_000) revert InvalidThreshold();
-        threshold1e8 = thr; emit ThresholdUpdated(thr);
+    function setThreshold(uint256 thr1e8) external onlyOwner {
+        if (thr1e8 == 0 || thr1e8 >= 100_000_000) revert InvalidThreshold();
+        threshold1e8 = thr1e8; emit ThresholdUpdated(thr1e8);
     }
     function setMaxStale(uint256 s) external onlyOwner { maxStale = s; emit MaxStaleUpdated(s); }
 
-    function conditionMet(bytes32 policyId) external view returns (bool) { return condition[policyId]; }
+    // --- oracle facade ---
+    function latestPrice(bytes32 /*assetId*/) external view returns (int256 price, uint256 updatedAt) {
+        (, int256 ans,, uint256 upd,) = feed.latestRoundData();
+        uint8 d = feed.decimals();
+        if (d == 8) return (ans, upd);
+        if (d < 8) return (ans * int256(10 ** (8 - d)), upd);
+        return (ans / int256(10 ** (d - 8)), upd);
+    }
 
     function setCondition(bytes32 policyId, bool met) external onlyKeeper {
         if (resolved[policyId]) revert AlreadyResolved();
@@ -70,9 +69,16 @@ contract DepegOracleAdapter is Ownable {
         emit ConditionSet(policyId, met, px, ts);
     }
 
+    function conditionMet(bytes32 policyId) external view returns (bool) {
+        return condition[policyId];
+    }
+
     function _normalize(int256 answer, uint256 updatedAt) internal view returns (int256, uint256) {
         uint8 d = feed.decimals();
-        int256 n = d == 8 ? answer : (d < 8 ? answer * int256(10 ** (8 - d)) : answer / int256(10 ** (d - 8)));
-        return (n, updatedAt);
+        int256 normalized;
+        if (d == 8) normalized = answer;
+        else if (d < 8) normalized = answer * int256(10 ** (8 - d));
+        else normalized = answer / int256(10 ** (d - 8));
+        return (normalized, updatedAt);
     }
 }

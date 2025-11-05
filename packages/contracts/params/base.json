@@ -1,15 +1,8 @@
 {
-  "chainId": 8453,
   "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  "chainlink_usdc_usd": "0x2489462e64ea205386b7b8737609B3701047a77d",
+  "chainlink_usdc_usd": "0x2489462e64Ea205386b7b8737609B3701047a77d",
+  "keeper": "0x981306c1aE8829F07444249Ce2D8800F89113B74",
   "depeg_threshold_1e8": 98000000,
   "max_stale_seconds": 600,
-  "keeper": "0x0000000000000000000000000000000000000000",
-  "curve": { "baseProbPerDay": 50, "slopePerDay": 25, "minPremiumBps": 50 },
-  "caps": {
-    "maxCoveragePerPolicy": "10000000000",
-    "dailyNotionalLimit":   "250000000000",
-    "maxPayoutPerResolve":  "50000000000",
-    "minPoolTVLToSell":     "100000000000"
-  }
+  "curve": { "baseProbPerDay": 100, "slopePerDay": 1, "minPremiumBps": 50 }
 }
