@@ -1,4 +1,16 @@
 {
+  "name": "dsrpt",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "cd packages/web && npm run dev",
+    "build": "cd packages/web && npm run build",
+    "start": "cd packages/web && npm run start"
+  }
+}
+{
 	"dependencies": {
 		"dotenv": "^17.2.2",
 		"ethers": "^6.15.0",
