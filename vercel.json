@@ -1,1 +1,4 @@
-{ "version": 2, "projects": [], "rootDirectory": "packages/web" }
+{
+  "version": 2,
+  "rootDirectory": "packages/web"
+}
