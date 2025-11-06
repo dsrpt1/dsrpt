@@ -1,6 +1,7 @@
 'use client'
-import Header from '@/components/Header'
-import { useReadContract, useAccount } from 'wagmi'
+
+import Header from '@/components/header'
+import { useReadContract } from 'wagmi'
 import { formatUnits } from 'viem'
 import { aggregatorV3Abi } from '@/abis/aggregatorV3'
 import { erc20Abi } from '@/abis/erc20'
@@ -12,34 +13,63 @@ const USDC = process.env.NEXT_PUBLIC_USDC as `0x${string}`
 const POOL = process.env.NEXT_PUBLIC_LIQUIDITY_POOL as `0x${string}`
 const PM   = process.env.NEXT_PUBLIC_POLICY_MANAGER as `0x${string}`
 
+// Chainlink latestRoundData typically returns:
+// (roundId, answer, startedAt, updatedAt, answeredInRound)
+// We'll type it so we don't need `any`.
+type LatestRoundData = readonly [bigint, bigint, bigint, bigint, bigint]
+
 export default function Page() {
-  const { address } = useAccount()
+  // const { address } = useAccount() // not used yet, so remove to satisfy eslint
 
   const { data: round } = useReadContract({
-    address: FEED, abi: aggregatorV3Abi, functionName: 'latestRoundData', query: { enabled: !!FEED }
+    address: FEED,
+    abi: aggregatorV3Abi,
+    functionName: 'latestRoundData',
+    query: { enabled: !!FEED },
   })
+
   const { data: priceDecimals } = useReadContract({
-    address: FEED, abi: aggregatorV3Abi, functionName: 'decimals', query: { enabled: !!FEED }
+    address: FEED,
+    abi: aggregatorV3Abi,
+    functionName: 'decimals',
+    query: { enabled: !!FEED },
   })
 
   const { data: poolUsdcbal } = useReadContract({
-    address: USDC, abi: erc20Abi, functionName: 'balanceOf',
-    args: POOL ? [POOL] : undefined, query: { enabled: !!POOL && !!USDC }
+    address: USDC,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: POOL ? [POOL] : undefined,
+    query: { enabled: !!POOL && !!USDC },
   })
+
   const { data: usdcDecimals } = useReadContract({
-    address: USDC, abi: erc20Abi, functionName: 'decimals', query: { enabled: !!USDC }
+    address: USDC,
+    abi: erc20Abi,
+    functionName: 'decimals',
+    query: { enabled: !!USDC },
   })
+
   const { data: usdcSymbol } = useReadContract({
-    address: USDC, abi: erc20Abi, functionName: 'symbol', query: { enabled: !!USDC }
+    address: USDC,
+    abi: erc20Abi,
+    functionName: 'symbol',
+    query: { enabled: !!USDC },
   })
 
   const { data: oracleAddr } = useReadContract({
-    address: PM, abi: policyManagerAbi, functionName: 'oracle', query: { enabled: !!PM }
+    address: PM,
+    abi: policyManagerAbi,
+    functionName: 'oracle',
+    query: { enabled: !!PM },
   })
 
   const price = useMemo(() => {
     if (!round || priceDecimals == null) return undefined
-    const answer = (round as any).answer as bigint
+
+    // round is the tuple from Chainlink
+    const tuple = round as LatestRoundData
+    const answer = tuple[1] // index 1 = answer
     return Number(formatUnits(answer, Number(priceDecimals)))
   }, [round, priceDecimals])
 
@@ -63,7 +93,9 @@ export default function Page() {
         <section className="border rounded-2xl p-4">
           <h2 className="text-xl font-semibold mb-2">Pool</h2>
           <div>Pool address: {POOL || '—'}</div>
-          <div>Asset: {USDC} {usdcSymbol ? `(${usdcSymbol as string})` : ''}</div>
+          <div>
+            Asset: {USDC} {usdcSymbol ? `(${usdcSymbol as string})` : ''}
+          </div>
           <div>USDC balance: {poolBalance !== undefined ? poolBalance : '…'}</div>
         </section>
 
