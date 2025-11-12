@@ -3,7 +3,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { pricePolicy, validateQuoteInput, type QuoteInput, type PriceBreakdown } from '@/lib/risk/price';
-import { type PerilSpec, type Regime } from '@/lib/risk/hazard';
+import { type PerilSpec } from '@/lib/risk/hazard';
+import { detectRegime, type RegimeDetectionResult } from '@/lib/risk/regimeDetector';
 import usdcDepegPeril from '@/config/perils/usdc-depeg.json';
 
 // Type-safe peril loading
@@ -13,7 +14,6 @@ const PERILS: Record<string, PerilSpec> = {
 
 export type QuoteRequest = {
   peril_id: string;
-  regime: Regime;
   limit_usd: number;
   tenor_days: number;
   attachment_pct?: number;
@@ -27,6 +27,7 @@ export type QuoteResponse =
   | {
       success: true;
       quote: PriceBreakdown;
+      regime_detection: RegimeDetectionResult;
       request: QuoteRequest;
     }
   | {
@@ -40,7 +41,6 @@ export type QuoteResponse =
  * Request body:
  * {
  *   "peril_id": "usdc-depeg",
- *   "regime": "volatile",
  *   "limit_usd": 1000000,
  *   "tenor_days": 30,
  *   "attachment_pct": 0,
@@ -62,6 +62,13 @@ export type QuoteResponse =
  *     "premium": 54055.80,
  *     "utilization_after": 0.505,
  *     "metadata": { ... }
+ *   },
+ *   "regime_detection": {
+ *     "regime": "volatile",
+ *     "intensity": 0.0123,
+ *     "price": 0.9877,
+ *     "confidence": "high",
+ *     "reason": "USDC trading at $0.9877 (1.23% depeg intensity)"
  *   }
  * }
  */
@@ -75,16 +82,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuoteResp
         {
           success: false,
           error: `Unknown peril: ${body.peril_id}. Available: ${Object.keys(PERILS).join(', ')}`,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!body.regime || !['calm', 'volatile', 'crisis'].includes(body.regime)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid regime: ${body.regime}. Must be one of: calm, volatile, crisis`,
         },
         { status: 400 }
       );
@@ -110,11 +107,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuoteResp
       );
     }
 
+    // AUTOMATIC REGIME DETECTION from on-chain oracle
+    const regimeDetection = await detectRegime();
+
     // Build quote input
     const peril = PERILS[body.peril_id];
     const quoteInput: QuoteInput = {
       perilId: body.peril_id,
-      regime: body.regime,
+      regime: regimeDetection.regime, // Auto-detected, not user-provided
       notionalUSD: body.limit_usd,
       attachmentPct: body.attachment_pct ?? 0,
       limitUSD: body.limit_usd,
@@ -144,6 +144,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuoteResp
     return NextResponse.json({
       success: true,
       quote,
+      regime_detection: regimeDetection,
       request: body,
     });
   } catch (error) {

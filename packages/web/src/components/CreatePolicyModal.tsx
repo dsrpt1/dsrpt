@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { parseUnits } from 'viem';
 import CyberButton from './CyberButton';
 import type { PriceBreakdown } from '@/lib/risk/price';
-import type { Regime } from '@/lib/risk/hazard';
+import type { RegimeDetectionResult } from '@/lib/risk/regimeDetector';
 
 interface CreatePolicyModalProps {
   isOpen: boolean;
@@ -14,23 +14,25 @@ interface CreatePolicyModalProps {
 type QuoteResponse = {
   success: boolean;
   quote?: PriceBreakdown;
+  regime_detection?: RegimeDetectionResult;
   error?: string;
 };
 
 export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreatePolicyModalProps) {
   const [payout, setPayout] = useState('1000');
   const [durationDays, setDurationDays] = useState('30');
-  const [regime, setRegime] = useState<Regime>('volatile');
   const [loading, setLoading] = useState(false);
   const [isPremiumLoading, setIsPremiumLoading] = useState(false);
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(null);
+  const [regimeDetection, setRegimeDetection] = useState<RegimeDetectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
-  // Fetch premium from API
+  // Fetch premium from API (regime auto-detected)
   const fetchPremium = useCallback(async () => {
     if (!payout || !durationDays || Number(payout) <= 0 || Number(durationDays) <= 0) {
       setPriceBreakdown(null);
+      setRegimeDetection(null);
       return;
     }
 
@@ -43,7 +45,6 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           peril_id: 'usdc-depeg',
-          regime,
           limit_usd: Number(payout),
           tenor_days: Number(durationDays),
           attachment_pct: 0,
@@ -56,20 +57,23 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
 
       const data: QuoteResponse = await response.json();
 
-      if (data.success && data.quote) {
+      if (data.success && data.quote && data.regime_detection) {
         setPriceBreakdown(data.quote);
+        setRegimeDetection(data.regime_detection);
       } else {
         setError(data.error || 'Failed to calculate premium');
         setPriceBreakdown(null);
+        setRegimeDetection(null);
       }
     } catch (err) {
       console.error('Error fetching premium:', err);
       setError('Network error calculating premium');
       setPriceBreakdown(null);
+      setRegimeDetection(null);
     } finally {
       setIsPremiumLoading(false);
     }
-  }, [payout, durationDays, regime]);
+  }, [payout, durationDays]);
 
   // Fetch premium when inputs change
   useEffect(() => {
@@ -163,38 +167,38 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
               </div>
             </div>
 
-            {/* Regime Selector */}
-            <div>
-              <label className="block text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-2">
-                Market Regime
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['calm', 'volatile', 'crisis'] as Regime[]).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRegime(r)}
-                    className={`py-2 px-4 text-sm font-bold uppercase tracking-wider transition-all ${
-                      regime === r
-                        ? 'bg-dsrpt-cyan-primary text-black'
-                        : 'bg-dsrpt-gray-800 text-dsrpt-cyan-dark hover:bg-dsrpt-gray-700'
-                    } border ${
-                      regime === r ? 'border-dsrpt-cyan-primary' : 'border-dsrpt-cyan-primary/20'
-                    } rounded`}
-                  >
-                    {r}
-                  </button>
-                ))}
+            {/* Auto-Detected Regime Display */}
+            {regimeDetection && (
+              <div className="p-4 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/30 rounded">
+                <label className="block text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-2">
+                  Detected Market Regime
+                </label>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl font-bold uppercase tracking-wider">
+                    <span
+                      className={
+                        regimeDetection.regime === 'calm'
+                          ? 'text-green-400'
+                          : regimeDetection.regime === 'volatile'
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
+                      }
+                    >
+                      {regimeDetection.regime}
+                    </span>
+                  </div>
+                  <div className="text-xs text-dsrpt-cyan-dark font-mono">
+                    Confidence: {regimeDetection.confidence.toUpperCase()}
+                  </div>
+                </div>
+                <p className="text-xs text-dsrpt-cyan-dark mt-2 font-mono">
+                  {'//'} {regimeDetection.reason}
+                </p>
+                <p className="text-xs text-dsrpt-cyan-dark/70 mt-1 font-mono">
+                  {'//'} Auto-detected from on-chain oracle (updated: {new Date(regimeDetection.updatedAt * 1000).toLocaleTimeString()})
+                </p>
               </div>
-              <p className="text-xs text-dsrpt-cyan-dark mt-1 font-mono">
-                {'//'}{' '}
-                {regime === 'calm'
-                  ? 'Normal market conditions, low depeg risk'
-                  : regime === 'volatile'
-                  ? 'Elevated stress, moderate depeg risk'
-                  : 'Crisis conditions, high depeg probability'}
-              </p>
-            </div>
+            )}
 
             {/* Error Display */}
             {error && (
@@ -284,7 +288,9 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
                 <div>&gt; PREMIUM: {premium.toFixed(2)} USDC</div>
                 <div>&gt; COVERAGE: {payout} USDC</div>
                 <div>&gt; TENOR: {durationDays} DAYS</div>
-                <div>&gt; REGIME: {regime.toUpperCase()}</div>
+                {regimeDetection && (
+                  <div>&gt; REGIME: {regimeDetection.regime.toUpperCase()} (auto-detected)</div>
+                )}
                 <div>&gt; MULTIPLIER: {premium > 0 ? (Number(payout) / premium).toFixed(2) : '---'}x</div>
               </div>
             </div>
