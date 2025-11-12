@@ -1,0 +1,100 @@
+{
+  "id": "usdc-depeg",
+  "display_name": "USDC Depeg Protection",
+  "description": "Parametric insurance against USDC/USD price deviation (depeg events)",
+  "regimes": ["calm", "volatile", "crisis"],
+  "payout": {
+    "type": "piecewise_linear",
+    "bands": [
+      {
+        "from": 0.0,
+        "to": 0.005,
+        "payout_at_from": 0.0,
+        "payout_at_to": 0.0
+      },
+      {
+        "from": 0.005,
+        "to": 0.02,
+        "payout_at_from": 0.0,
+        "payout_at_to": 0.4
+      },
+      {
+        "from": 0.02,
+        "to": 0.05,
+        "payout_at_from": 0.4,
+        "payout_at_to": 0.8
+      },
+      {
+        "from": 0.05,
+        "to": 1.0,
+        "payout_at_from": 0.8,
+        "payout_at_to": 1.0
+      }
+    ],
+    "cap": 1.0,
+    "deductible_intensity": 0.0
+  },
+  "curve_params": {
+    "pot_threshold_u": {
+      "calm": 0.003,
+      "volatile": 0.005,
+      "crisis": 0.01
+    },
+    "gpd": {
+      "calm": {
+        "xi": 0.15,
+        "beta": 0.002
+      },
+      "volatile": {
+        "xi": 0.25,
+        "beta": 0.005
+      },
+      "crisis": {
+        "xi": 0.35,
+        "beta": 0.012
+      }
+    },
+    "clustering_hawkes": {
+      "calm": {
+        "mu": 0.001,
+        "alpha": 0.05,
+        "beta": 0.5
+      },
+      "volatile": {
+        "mu": 0.01,
+        "alpha": 0.15,
+        "beta": 0.8
+      },
+      "crisis": {
+        "mu": 0.05,
+        "alpha": 0.3,
+        "beta": 1.2
+      }
+    }
+  },
+  "pricing": {
+    "tvar_alpha": 0.99,
+    "k_risk_load": 0.35,
+    "overhead": 0.03,
+    "liquidity_load": {
+      "base_bps": 25,
+      "slope_bps_per_util": 120
+    },
+    "utilization_limits": {
+      "target": 0.7,
+      "hard": 0.85
+    }
+  },
+  "metadata": {
+    "oracle_address": "0x2489462e64Ea205386b7b8737609B3701047a77d",
+    "oracle_feed": "Chainlink USDC/USD",
+    "intensity_formula": "max(0, 1 - TWAP_5m(USDC/USD))",
+    "calibration_date": "2025-01-15",
+    "historical_data_window": "2020-2025",
+    "notes": [
+      "Calm regime: Normal market conditions, rare small deviations",
+      "Volatile regime: Increased market stress, moderate depeg risk",
+      "Crisis regime: Severe stress (e.g., banking crisis), high depeg probability"
+    ]
+  }
+}

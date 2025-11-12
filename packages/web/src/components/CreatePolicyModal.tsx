@@ -1,10 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { parseUnits, formatUnits, type Address } from 'viem';
-import { useReadContract } from 'wagmi';
+import { useState, useEffect, useCallback } from 'react';
+import { parseUnits } from 'viem';
 import CyberButton from './CyberButton';
-import { hazardCurveAbi } from '@/abis/hazardCurve';
-import { ADDRESSES } from '@/lib/addresses';
+import type { PriceBreakdown } from '@/lib/risk/price';
+import type { Regime } from '@/lib/risk/hazard';
 
 interface CreatePolicyModalProps {
   isOpen: boolean;
@@ -12,42 +11,88 @@ interface CreatePolicyModalProps {
   onSubmit: (premium: bigint, payout: bigint, duration: bigint) => Promise<void>;
 }
 
-// Default curve ID from deployment (keccak256 hash used in deployment)
-const DEFAULT_CURVE_ID = '0x39b093ac4c94c4267dd13ad56b8faca1d0b90cbdc6757b4247b164c12773e3de' as const;
+type QuoteResponse = {
+  success: boolean;
+  quote?: PriceBreakdown;
+  error?: string;
+};
 
 export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreatePolicyModalProps) {
   const [payout, setPayout] = useState('1000');
   const [durationDays, setDurationDays] = useState('30');
+  const [regime, setRegime] = useState<Regime>('volatile');
   const [loading, setLoading] = useState(false);
-  const [calculatedPremium, setCalculatedPremium] = useState<bigint>(0n);
+  const [isPremiumLoading, setIsPremiumLoading] = useState(false);
+  const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
-  // Get premium from hazard curve
-  const payoutWei = parseUnits(payout || '0', 6);
-  const { data: premiumFromCurve, isLoading: isPremiumLoading } = useReadContract({
-    address: ADDRESSES.base.curve as Address,
-    abi: hazardCurveAbi,
-    functionName: 'premiumOf',
-    args: [DEFAULT_CURVE_ID, payoutWei, BigInt(Number(durationDays) || 0)],
-  });
-
-  // Update calculated premium when curve returns data
-  useEffect(() => {
-    if (premiumFromCurve !== undefined) {
-      setCalculatedPremium(premiumFromCurve);
+  // Fetch premium from API
+  const fetchPremium = useCallback(async () => {
+    if (!payout || !durationDays || Number(payout) <= 0 || Number(durationDays) <= 0) {
+      setPriceBreakdown(null);
+      return;
     }
-  }, [premiumFromCurve]);
+
+    setIsPremiumLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          peril_id: 'usdc-depeg',
+          regime,
+          limit_usd: Number(payout),
+          tenor_days: Number(durationDays),
+          attachment_pct: 0,
+          portfolio: {
+            utilization: 0.5,
+            tvar99_headroom_usd: Number(payout) * 10,
+          },
+        }),
+      });
+
+      const data: QuoteResponse = await response.json();
+
+      if (data.success && data.quote) {
+        setPriceBreakdown(data.quote);
+      } else {
+        setError(data.error || 'Failed to calculate premium');
+        setPriceBreakdown(null);
+      }
+    } catch (err) {
+      console.error('Error fetching premium:', err);
+      setError('Network error calculating premium');
+      setPriceBreakdown(null);
+    } finally {
+      setIsPremiumLoading(false);
+    }
+  }, [payout, durationDays, regime]);
+
+  // Fetch premium when inputs change
+  useEffect(() => {
+    if (isOpen) {
+      fetchPremium();
+    }
+  }, [isOpen, fetchPremium]);
 
   if (!isOpen) return null;
 
+  const premium = priceBreakdown?.premium || 0;
+  const premiumWei = parseUnits(premium.toFixed(6), 6);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!priceBreakdown) return;
+
     setLoading(true);
     try {
-      // Convert to proper units (USDC has 6 decimals)
       const payoutWei = parseUnits(payout, 6);
       const durationSeconds = BigInt(Number(durationDays) * 24 * 60 * 60);
 
-      await onSubmit(calculatedPremium, payoutWei, durationSeconds);
+      await onSubmit(premiumWei, payoutWei, durationSeconds);
       onClose();
     } catch (error) {
       console.error('Error creating policy:', error);
@@ -57,8 +102,8 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+      <div className="relative w-full max-w-2xl my-8">
         {/* Modal */}
         <div className="cyber-card bg-dsrpt-gray-900 border-dsrpt-cyan-primary/50">
           {/* Scan line effect */}
@@ -70,77 +115,177 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
               Create Policy
             </h2>
             <p className="text-xs text-dsrpt-cyan-secondary mt-2 font-mono">
-              {'//'} INITIALIZE PARAMETRIC INSURANCE POLICY
+              {'//'} ACTUARIALLY PRICED PARAMETRIC INSURANCE
             </p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Payout Input */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Payout Input */}
+              <div>
+                <label className="block text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-2">
+                  Coverage Limit (USDC)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={payout}
+                  onChange={(e) => setPayout(e.target.value)}
+                  className="cyber-input w-full"
+                  placeholder="1000.00"
+                  required
+                />
+                <p className="text-xs text-dsrpt-cyan-dark mt-1 font-mono">
+                  {'//'} Maximum payout if triggered
+                </p>
+              </div>
+
+              {/* Duration Input */}
+              <div>
+                <label className="block text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-2">
+                  Tenor (Days)
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={durationDays}
+                  onChange={(e) => setDurationDays(e.target.value)}
+                  className="cyber-input w-full"
+                  placeholder="30"
+                  required
+                />
+                <p className="text-xs text-dsrpt-cyan-dark mt-1 font-mono">
+                  {'//'} Policy coverage period
+                </p>
+              </div>
+            </div>
+
+            {/* Regime Selector */}
             <div>
               <label className="block text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-2">
-                Payout (USDC)
+                Market Regime
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={payout}
-                onChange={(e) => setPayout(e.target.value)}
-                className="cyber-input w-full"
-                placeholder="1000.00"
-                required
-              />
+              <div className="grid grid-cols-3 gap-2">
+                {(['calm', 'volatile', 'crisis'] as Regime[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRegime(r)}
+                    className={`py-2 px-4 text-sm font-bold uppercase tracking-wider transition-all ${
+                      regime === r
+                        ? 'bg-dsrpt-cyan-primary text-black'
+                        : 'bg-dsrpt-gray-800 text-dsrpt-cyan-dark hover:bg-dsrpt-gray-700'
+                    } border ${
+                      regime === r ? 'border-dsrpt-cyan-primary' : 'border-dsrpt-cyan-primary/20'
+                    } rounded`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
               <p className="text-xs text-dsrpt-cyan-dark mt-1 font-mono">
-                {'//'} Amount received if condition met
+                {'//'}{' '}
+                {regime === 'calm'
+                  ? 'Normal market conditions, low depeg risk'
+                  : regime === 'volatile'
+                  ? 'Elevated stress, moderate depeg risk'
+                  : 'Crisis conditions, high depeg probability'}
               </p>
             </div>
 
-            {/* Duration Input */}
-            <div>
-              <label className="block text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-2">
-                Duration (Days)
-              </label>
-              <input
-                type="number"
-                step="1"
-                min="1"
-                value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-                className="cyber-input w-full"
-                placeholder="30"
-                required
-              />
-              <p className="text-xs text-dsrpt-cyan-dark mt-1 font-mono">
-                {'//'} Policy coverage period
-              </p>
-            </div>
+            {/* Error Display */}
+            {error && (
+              <div className="p-4 bg-red-900/20 border border-red-500/50 rounded">
+                <p className="text-sm text-red-400 font-mono">{error}</p>
+              </div>
+            )}
 
             {/* Calculated Premium Display */}
             <div className="p-4 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/30 rounded">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-bold text-dsrpt-cyan-primary uppercase tracking-wider">
-                  Calculated Premium
+                  Total Premium
                 </label>
                 {isPremiumLoading && (
                   <span className="text-xs text-dsrpt-cyan-secondary animate-pulse">Calculating...</span>
                 )}
               </div>
               <div className="text-3xl font-bold text-dsrpt-cyan-primary text-glow">
-                {isPremiumLoading ? '---' : formatUnits(calculatedPremium, 6)} USDC
+                {isPremiumLoading || !priceBreakdown
+                  ? '---'
+                  : `${premium.toFixed(2)} USDC`}
               </div>
               <p className="text-xs text-dsrpt-cyan-dark mt-2 font-mono">
-                {'//'} Auto-calculated by hazard curve engine
+                {'//'} GPD + Hawkes actuarial pricing
               </p>
+
+              {/* Breakdown Toggle */}
+              {priceBreakdown && (
+                <button
+                  type="button"
+                  onClick={() => setShowBreakdown(!showBreakdown)}
+                  className="mt-3 text-xs text-dsrpt-cyan-secondary hover:text-dsrpt-cyan-primary transition-colors font-mono"
+                >
+                  {showBreakdown ? '[-] Hide' : '[+] Show'} Breakdown
+                </button>
+              )}
             </div>
+
+            {/* Premium Breakdown */}
+            {showBreakdown && priceBreakdown && (
+              <div className="p-4 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/20 rounded space-y-2">
+                <div className="text-xs font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-3">
+                  Premium Components
+                </div>
+                <div className="text-xs text-dsrpt-cyan-dark font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span>&gt; Expected Loss (EL):</span>
+                    <span className="text-dsrpt-cyan-secondary">${priceBreakdown.EL.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>&gt; Risk Load (RL):</span>
+                    <span className="text-dsrpt-cyan-secondary">${priceBreakdown.RL.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>&gt; Capital Load (CL):</span>
+                    <span className="text-dsrpt-cyan-secondary">${priceBreakdown.CL.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>&gt; Liquidity Load (LL):</span>
+                    <span className="text-dsrpt-cyan-secondary">${priceBreakdown.LL.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>&gt; Overhead (O/H):</span>
+                    <span className="text-dsrpt-cyan-secondary">${priceBreakdown.O_H.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-dsrpt-cyan-primary/20 font-bold text-dsrpt-cyan-primary">
+                    <span>&gt; TOTAL:</span>
+                    <span>${premium.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Metadata */}
+                {priceBreakdown.metadata && (
+                  <div className="mt-4 pt-4 border-t border-dsrpt-cyan-primary/10 text-xs text-dsrpt-cyan-dark/70 font-mono space-y-1">
+                    <div>&gt; Trigger Prob: {(priceBreakdown.metadata.trigger_prob * 100).toFixed(2)}%</div>
+                    <div>&gt; E[Payout|Trigger]: {(priceBreakdown.metadata.expected_payout_given_trigger * 100).toFixed(2)}%</div>
+                    <div>&gt; λ_eff: {priceBreakdown.metadata.hawkes_lambda_eff.toFixed(6)} /day</div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Summary */}
             <div className="p-4 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/20 rounded">
               <div className="text-xs text-dsrpt-cyan-dark font-mono space-y-1">
-                <div>&gt; PREMIUM: {formatUnits(calculatedPremium, 6)} USDC</div>
-                <div>&gt; PAYOUT: {payout} USDC</div>
-                <div>&gt; DURATION: {durationDays} DAYS</div>
-                <div>&gt; MULTIPLIER: {calculatedPremium > 0n ? (Number(payout) / Number(formatUnits(calculatedPremium, 6))).toFixed(2) : '---'}x</div>
+                <div>&gt; PREMIUM: {premium.toFixed(2)} USDC</div>
+                <div>&gt; COVERAGE: {payout} USDC</div>
+                <div>&gt; TENOR: {durationDays} DAYS</div>
+                <div>&gt; REGIME: {regime.toUpperCase()}</div>
+                <div>&gt; MULTIPLIER: {premium > 0 ? (Number(payout) / premium).toFixed(2) : '---'}x</div>
               </div>
             </div>
 
@@ -149,7 +294,7 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
               <CyberButton
                 variant="primary"
                 className="flex-1"
-                disabled={loading || isPremiumLoading || calculatedPremium === 0n}
+                disabled={loading || isPremiumLoading || !priceBreakdown}
               >
                 {loading ? 'Creating...' : 'Create Policy'}
               </CyberButton>
@@ -165,10 +310,11 @@ export default function CreatePolicyModal({ isOpen, onClose, onSubmit }: CreateP
 
             {/* Info Note */}
             <div className="text-xs text-dsrpt-cyan-dark/70 font-mono">
-              <div className="mb-1">{'//'} PREMIUM CALCULATION:</div>
-              <div className="pl-4">Premium is automatically calculated based on the hazard curve risk model.</div>
-              <div className="pl-4">Curve parameters: baseProbPerDay, slopePerDay, minPremiumBps.</div>
-              <div className="pl-4">Current formula: (payout × minPremiumBps) / 10,000</div>
+              <div className="mb-1">{'//'} ACTUARIAL PRICING MODEL:</div>
+              <div className="pl-4">• Peaks-Over-Threshold (POT) with GPD tail modeling</div>
+              <div className="pl-4">• Hawkes self-exciting process for event clustering</div>
+              <div className="pl-4">• Premium = EL + RL + CL + LL + O/H</div>
+              <div className="pl-4">• EL = Limit × p_trigger(T) × E[g(I) | I&gt;u]</div>
             </div>
           </form>
         </div>
