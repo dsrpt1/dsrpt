@@ -40,7 +40,7 @@ const ADAPTER_ABI = [
   },
   {
     type: "function",
-    name: "threshold",
+    name: "threshold1e8",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }],
@@ -297,7 +297,7 @@ export async function runHealthCheck(): Promise<HealthReport> {
         client.readContract({
           address: A.adapter as Address,
           abi: ADAPTER_ABI,
-          functionName: "threshold",
+          functionName: "threshold1e8",
         }),
         client.readContract({
           address: A.adapter as Address,
