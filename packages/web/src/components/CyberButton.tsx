@@ -6,6 +6,7 @@ interface CyberButtonProps {
   variant?: 'primary' | 'secondary';
   disabled?: boolean;
   className?: string;
+  type?: 'button' | 'submit' | 'reset';
 }
 
 export default function CyberButton({
@@ -13,12 +14,14 @@ export default function CyberButton({
   onClick,
   variant = 'secondary',
   disabled = false,
-  className = ''
+  className = '',
+  type = 'submit'
 }: CyberButtonProps) {
   const variantClass = variant === 'primary' ? 'cyber-button-primary' : '';
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={`cyber-button ${variantClass} ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}

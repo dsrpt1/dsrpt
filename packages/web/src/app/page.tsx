@@ -6,15 +6,188 @@ import CyberCard from '@/components/CyberCard';
 import CyberButton from '@/components/CyberButton';
 import DataMetric from '@/components/DataMetric';
 import RiskMeter from '@/components/RiskMeter';
+import CreatePolicyModal from '@/components/CreatePolicyModal';
+import FundPoolModal from '@/components/FundPoolModal';
+import OracleCheckModal from '@/components/OracleCheckModal';
 import { useEffect, useState } from 'react';
+import { useAccount, useWriteContract, useReadContract } from 'wagmi';
+import { formatUnits, type Address } from 'viem';
+import { ADDRESSES } from '@/lib/addresses';
+import { policyManagerAbi } from '@/abis/policyManager';
+import { liquidityPoolAbi } from '@/abis/liquidityPool';
+import { erc20Abi } from '@/abis/erc20';
 
 export default function Page() {
   const [rpc, setRpc] = useState<string>('');
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [isFundModalOpen, setIsFundModalOpen] = useState(false);
+  const [isOracleModalOpen, setIsOracleModalOpen] = useState(false);
+  const [txStatus, setTxStatus] = useState<string>('');
+
+  const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+
+  // Read user USDC balance
+  const { data: usdcBalance } = useReadContract({
+    address: ADDRESSES.base.usdc as Address,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+  });
+
+  // Read pool USDC balance
+  const { data: poolBalance } = useReadContract({
+    address: ADDRESSES.base.usdc as Address,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [ADDRESSES.base.pool as Address],
+  });
+
+  // Read next policy ID
+  const { data: nextPolicyId } = useReadContract({
+    address: ADDRESSES.base.pm as Address,
+    abi: policyManagerAbi,
+    functionName: 'nextPolicyId',
+  });
 
   useEffect(() => {
-    // read env at runtime (client)
     setRpc(process.env.NEXT_PUBLIC_BASE_RPC ?? 'not set');
   }, []);
+
+  const handleCreatePolicy = async (premium: bigint, payout: bigint, duration: bigint) => {
+    if (!isConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      setTxStatus('Creating policy...');
+      const hash = await writeContractAsync({
+        address: ADDRESSES.base.pm as Address,
+        abi: policyManagerAbi,
+        functionName: 'createPolicy',
+        args: [premium, payout, duration],
+      });
+
+      setTxStatus(`Transaction sent: ${hash.slice(0, 10)}...`);
+      setTimeout(() => setTxStatus(''), 5000);
+    } catch (error) {
+      console.error('Create policy error:', error);
+      setTxStatus('Error creating policy');
+      setTimeout(() => setTxStatus(''), 5000);
+      throw error;
+    }
+  };
+
+  const handleFundPool = async (amount: bigint) => {
+    if (!isConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      // First approve USDC
+      setTxStatus('Approving USDC...');
+      const approveHash = await writeContractAsync({
+        address: ADDRESSES.base.usdc as Address,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [ADDRESSES.base.pool as Address, amount],
+      });
+
+      setTxStatus(`Approval sent: ${approveHash.slice(0, 10)}...`);
+
+      // Wait a bit for approval to confirm
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Then deposit
+      setTxStatus('Depositing to pool...');
+      const depositHash = await writeContractAsync({
+        address: ADDRESSES.base.pool as Address,
+        abi: liquidityPoolAbi,
+        functionName: 'deposit',
+        args: [amount],
+      });
+
+      setTxStatus(`Deposit sent: ${depositHash.slice(0, 10)}...`);
+      setTimeout(() => setTxStatus(''), 5000);
+    } catch (error) {
+      console.error('Fund pool error:', error);
+      setTxStatus('Error funding pool');
+      setTimeout(() => setTxStatus(''), 5000);
+      throw error;
+    }
+  };
+
+  const handleOracleCheck = async () => {
+    try {
+      // Read oracle data
+      const [priceData, threshold, maxStale] = await Promise.all([
+        fetch(`${rpc}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_call',
+            params: [{
+              to: ADDRESSES.base.adapter,
+              data: '0x' + '50d25bcd' + '0'.repeat(64), // latestPrice(bytes32(0))
+            }, 'latest'],
+            id: 1,
+          }),
+        }).then(r => r.json()),
+        fetch(`${rpc}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_call',
+            params: [{
+              to: ADDRESSES.base.adapter,
+              data: '0xaced1661', // threshold1e8()
+            }, 'latest'],
+            id: 2,
+          }),
+        }).then(r => r.json()),
+        fetch(`${rpc}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_call',
+            params: [{
+              to: ADDRESSES.base.adapter,
+              data: '0x32c2d153', // maxStale()
+            }, 'latest'],
+            id: 3,
+          }),
+        }).then(r => r.json()),
+      ]);
+
+      // Parse results
+      const price = parseInt(priceData.result.slice(0, 66), 16) / 1e8;
+      const thresholdVal = parseInt(threshold.result, 16) / 1e8;
+      const maxStaleVal = parseInt(maxStale.result, 16);
+      const updatedAt = parseInt(priceData.result.slice(66), 16);
+      const now = Math.floor(Date.now() / 1000);
+
+      return {
+        price: price.toFixed(4),
+        threshold: thresholdVal.toFixed(4),
+        updatedAt: new Date(updatedAt * 1000).toLocaleString(),
+        maxStale: maxStaleVal.toString(),
+        isStale: now - updatedAt > maxStaleVal,
+        belowThreshold: price < thresholdVal,
+      };
+    } catch (error) {
+      console.error('Oracle check error:', error);
+      throw error;
+    }
+  };
+
+  const formattedBalance = usdcBalance ? formatUnits(usdcBalance, 6) : '0';
+  const formattedPoolBalance = poolBalance ? formatUnits(poolBalance, 6) : '0';
+  const activePolicies = nextPolicyId ? Number(nextPolicyId) - 1 : 0;
 
   return (
     <main className="min-h-screen bg-dsrpt-black relative overflow-hidden">
@@ -46,6 +219,15 @@ export default function Page() {
           </div>
         </section>
 
+        {/* Transaction Status */}
+        {txStatus && (
+          <div className="mb-6 p-4 bg-dsrpt-cyan-primary/10 border border-dsrpt-cyan-primary/30 rounded text-center">
+            <p className="text-sm text-dsrpt-cyan-primary font-mono uppercase tracking-wider">
+              {txStatus}
+            </p>
+          </div>
+        )}
+
         {/* Risk Overview Dashboard */}
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-6 flex items-center gap-3">
@@ -57,7 +239,7 @@ export default function Page() {
             <CyberCard glow>
               <DataMetric
                 label="Total Value Locked"
-                value="$0.00"
+                value={`$${formattedPoolBalance}`}
                 subValue="USDC"
                 trend="neutral"
               />
@@ -66,7 +248,7 @@ export default function Page() {
             <CyberCard glow>
               <DataMetric
                 label="Active Policies"
-                value="0"
+                value={activePolicies.toString()}
                 subValue="DEPLOYED"
                 trend="neutral"
               />
@@ -74,9 +256,9 @@ export default function Page() {
 
             <CyberCard glow>
               <DataMetric
-                label="Pool Utilization"
-                value="0%"
-                subValue="CAPACITY"
+                label="Your Balance"
+                value={`${formattedBalance}`}
+                subValue="USDC"
                 trend="neutral"
               />
             </CyberCard>
@@ -84,9 +266,9 @@ export default function Page() {
             <CyberCard glow>
               <DataMetric
                 label="System Status"
-                value="LIVE"
-                subValue="ALL SYSTEMS OPERATIONAL"
-                trend="up"
+                value={isConnected ? "CONNECTED" : "DISCONNECTED"}
+                subValue={isConnected ? "WALLET ACTIVE" : "CONNECT WALLET"}
+                trend={isConnected ? "up" : "neutral"}
               />
             </CyberCard>
           </div>
@@ -120,20 +302,29 @@ export default function Page() {
                 {'//'} INITIALIZE PROTOCOL OPERATIONS
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <CyberButton variant="primary">
+                <CyberButton
+                  variant="primary"
+                  onClick={() => setIsPolicyModalOpen(true)}
+                  disabled={!isConnected}
+                >
                   CREATE POLICY
                 </CyberButton>
-                <CyberButton>
+                <CyberButton
+                  onClick={() => setIsFundModalOpen(true)}
+                  disabled={!isConnected}
+                >
                   FUND POOL
                 </CyberButton>
-                <CyberButton>
+                <CyberButton
+                  onClick={() => setIsOracleModalOpen(true)}
+                >
                   ORACLE CHECK
                 </CyberButton>
               </div>
               <div className="mt-6 p-4 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/20 rounded">
                 <p className="text-xs text-dsrpt-cyan-dark font-mono">
-                  &gt; AWAITING USER INPUT...<br />
-                  &gt; CONNECT WALLET TO ENABLE PROTOCOL INTERACTIONS
+                  &gt; {isConnected ? 'WALLET CONNECTED - READY FOR OPERATIONS' : 'AWAITING USER INPUT...'}<br />
+                  &gt; {isConnected ? `ADDRESS: ${address?.slice(0, 10)}...${address?.slice(-8)}` : 'CONNECT WALLET TO ENABLE PROTOCOL INTERACTIONS'}
                 </p>
               </div>
             </CyberCard>
@@ -222,6 +413,24 @@ export default function Page() {
           </p>
         </footer>
       </div>
+
+      {/* Modals */}
+      <CreatePolicyModal
+        isOpen={isPolicyModalOpen}
+        onClose={() => setIsPolicyModalOpen(false)}
+        onSubmit={handleCreatePolicy}
+      />
+      <FundPoolModal
+        isOpen={isFundModalOpen}
+        onClose={() => setIsFundModalOpen(false)}
+        onSubmit={handleFundPool}
+        userBalance={formattedBalance}
+      />
+      <OracleCheckModal
+        isOpen={isOracleModalOpen}
+        onClose={() => setIsOracleModalOpen(false)}
+        onCheck={handleOracleCheck}
+      />
     </main>
   );
 }
