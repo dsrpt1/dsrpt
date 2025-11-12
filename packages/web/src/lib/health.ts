@@ -138,9 +138,41 @@ async function erc20Balance(token: Address, holder: Address) {
 }
 
 function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
+  if (e instanceof Error) {
+    const msg = e.message;
+    // Detect rate limit errors
+    if (msg.includes('rate limit') || msg.includes('429')) {
+      return 'RPC rate limit - retrying...';
+    }
+    return msg;
+  }
   if (typeof e === "string") return e;
   return "read failed";
+}
+
+// Retry helper with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      const isRateLimit = error instanceof Error &&
+        (error.message.includes('rate limit') || error.message.includes('429'));
+
+      // Only retry on rate limit errors
+      if (isRateLimit && i < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, i);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('Max retries exceeded');
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -253,25 +285,27 @@ export async function runHealthCheck(): Promise<HealthReport> {
     });
   }
 
-  // Adapter params
+  // Adapter params (with retry for rate limits)
   try {
-    const [keeper, threshold, maxStale] = await Promise.all([
-      client.readContract({
-        address: A.adapter as Address,
-        abi: ADAPTER_ABI,
-        functionName: "keeper",
-      }),
-      client.readContract({
-        address: A.adapter as Address,
-        abi: ADAPTER_ABI,
-        functionName: "threshold",
-      }),
-      client.readContract({
-        address: A.adapter as Address,
-        abi: ADAPTER_ABI,
-        functionName: "maxStale",
-      }),
-    ]);
+    const [keeper, threshold, maxStale] = await retryWithBackoff(() =>
+      Promise.all([
+        client.readContract({
+          address: A.adapter as Address,
+          abi: ADAPTER_ABI,
+          functionName: "keeper",
+        }),
+        client.readContract({
+          address: A.adapter as Address,
+          abi: ADAPTER_ABI,
+          functionName: "threshold",
+        }),
+        client.readContract({
+          address: A.adapter as Address,
+          abi: ADAPTER_ABI,
+          functionName: "maxStale",
+        }),
+      ])
+    );
 
     const keeperBadge: Badge =
       A.keeper && keeper.toLowerCase() === A.keeper.toLowerCase()

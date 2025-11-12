@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { runHealthCheck } from '@/lib/health'
 import CyberCard from './CyberCard'
 import StatusBadge from './StatusBadge'
+import RateLimitAlert from './RateLimitAlert'
 
 type Result = Awaited<ReturnType<typeof runHealthCheck>>
 type BadgeType = 'ok' | 'warn' | 'error'
@@ -10,19 +11,34 @@ type BadgeType = 'ok' | 'warn' | 'error'
 export default function NetworkStatus() {
   const [data, setData] = useState<Result | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [showRateLimitAlert, setShowRateLimitAlert] = useState(false)
   const loading = !data && !err
 
   useEffect(() => {
     let on = true
     runHealthCheck()
       .then((r) => on && setData(r))
-      .catch((e) => on && setErr(String(e)))
+      .catch((e) => {
+        if (on) {
+          const errorMsg = String(e)
+          setErr(errorMsg)
+          // Check if it's a rate limit error
+          if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
+            setShowRateLimitAlert(true)
+          }
+        }
+      })
     return () => { on = false }
   }, [])
 
   const rows = useMemo(() => data?.rows ?? [], [data])
 
   return (
+    <>
+      <RateLimitAlert
+        show={showRateLimitAlert}
+        onClose={() => setShowRateLimitAlert(false)}
+      />
     <CyberCard scan={loading}>
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -80,5 +96,6 @@ export default function NetworkStatus() {
         </div>
       )}
     </CyberCard>
+    </>
   )
 }
