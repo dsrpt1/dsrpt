@@ -51,7 +51,7 @@ export default function Page() {
   });
 
   useEffect(() => {
-    setRpc(process.env.NEXT_PUBLIC_BASE_RPC ?? 'not set');
+    setRpc(process.env.NEXT_PUBLIC_RPC_URL ?? process.env.NEXT_PUBLIC_BASE_RPC ?? 'not set');
   }, []);
 
   const handleCreatePolicy = async (premium: bigint, payout: bigint, duration: bigint) => {
