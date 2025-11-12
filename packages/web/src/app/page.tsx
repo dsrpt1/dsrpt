@@ -2,6 +2,10 @@
 'use client';
 
 import NetworkStatus from '@/components/NetworkStatus';
+import CyberCard from '@/components/CyberCard';
+import CyberButton from '@/components/CyberButton';
+import DataMetric from '@/components/DataMetric';
+import RiskMeter from '@/components/RiskMeter';
 import { useEffect, useState } from 'react';
 
 export default function Page() {
@@ -13,148 +17,209 @@ export default function Page() {
   }, []);
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: '#f8fafc',
-        padding: '24px',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1120,
-          margin: '0 auto',
-          display: 'grid',
-          gap: 16,
-        }}
-      >
-        {/* Header */}
-        <header
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div>
-            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>
-              DSRPT — MVP Console
-            </h1>
-            <p style={{ margin: '6px 0 0', color: '#6b7280' }}>
-              Monitor contracts, oracle feed adapter, and keeper on Base mainnet.
-            </p>
-          </div>
-        </header>
+    <main className="min-h-screen bg-dsrpt-black relative overflow-hidden">
+      {/* Animated background effects */}
+      <div className="absolute inset-0 bg-cyber-grid bg-grid opacity-20 pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-dsrpt-cyan-primary/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-dsrpt-accent-blue/5 rounded-full blur-3xl" />
 
-        {/* 2-column grid */}
-        <section
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1.3fr 1fr',
-            gap: 16,
-          }}
-        >
-          {/* LEFT */}
-          <div style={{ display: 'grid', gap: 16 }}>
-            {/* our status card */}
-            <NetworkStatus />
-
-            {/* placeholder actions */}
-            <section
-              style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: 16,
-                padding: 16,
-                background: '#fff',
-                boxShadow:
-                  '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-                Quick actions
-              </h2>
-              <p style={{ marginTop: 8, color: '#6b7280' }}>
-                Coming next: create policy, fund pool, trigger oracle check.
-              </p>
-            </section>
-          </div>
-
-          {/* RIGHT */}
-          <div style={{ display: 'grid', gap: 16 }}>
-            {/* activity */}
-            <section
-              style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: 16,
-                padding: 16,
-                background: '#fff',
-                boxShadow:
-                  '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-                Recent activity
-              </h2>
-              <ul style={{ marginTop: 10, paddingLeft: 18, color: '#6b7280' }}>
-                <li>New contracts deployed & verified on Base</li>
-                <li>Keeper EOA online: 0x9813...B74</li>
-                <li>USDC on Base configured</li>
-              </ul>
-            </section>
-
-            {/* env */}
-            <section
-              style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: 16,
-                padding: 16,
-                background: '#fff',
-                boxShadow:
-                  '0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03)',
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-                Environment
-              </h2>
-              <div style={{ marginTop: 8, color: '#6b7280', fontSize: 14 }}>
-                RPC:{' '}
-                <code
-                  style={{
-                    background: '#f1f5f9',
-                    padding: '2px 6px',
-                    borderRadius: 6,
-                  }}
-                >
-                  {rpc}
-                </code>
-                <br />
-                Network:{' '}
-                <code
-                  style={{
-                    background: '#f1f5f9',
-                    padding: '2px 6px',
-                    borderRadius: 6,
-                  }}
-                >
-                  Base (chainId 8453)
-                </code>
-              </div>
-            </section>
+      <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+        {/* Hero Section */}
+        <section className="mb-12 text-center py-12">
+          <h1 className="text-5xl md:text-7xl font-bold text-dsrpt-cyan-primary text-glow-strong uppercase tracking-wider mb-4">
+            DSRPT COMMAND CENTER
+          </h1>
+          <p className="text-dsrpt-cyan-secondary text-lg font-mono uppercase tracking-wider">
+            {'//'} MONITORING PARAMETRIC RISK PROTOCOL ON BASE MAINNET
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-4">
+            <div className="px-4 py-2 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/30 rounded clip-corner-tr">
+              <span className="text-xs text-dsrpt-cyan-primary font-mono uppercase tracking-wider">
+                CHAIN ID: 8453
+              </span>
+            </div>
+            <div className="px-4 py-2 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/30 rounded clip-corner-tl">
+              <span className="text-xs text-dsrpt-cyan-primary font-mono uppercase tracking-wider">
+                NETWORK: BASE
+              </span>
+            </div>
           </div>
         </section>
 
-        {/* footer */}
-        <footer
-          style={{
-            color: '#94a3b8',
-            fontSize: 12,
-            textAlign: 'center',
-            marginTop: 8,
-          }}
-        >
-          © {new Date().getFullYear()} DSRPT.finance — MVP
+        {/* Risk Overview Dashboard */}
+        <section className="mb-8">
+          <h2 className="text-2xl font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-6 flex items-center gap-3">
+            <span className="w-2 h-2 bg-dsrpt-cyan-primary rounded-full animate-pulse" />
+            RISK METRICS OVERVIEW
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <CyberCard glow>
+              <DataMetric
+                label="Total Value Locked"
+                value="$0.00"
+                subValue="USDC"
+                trend="neutral"
+              />
+            </CyberCard>
+
+            <CyberCard glow>
+              <DataMetric
+                label="Active Policies"
+                value="0"
+                subValue="DEPLOYED"
+                trend="neutral"
+              />
+            </CyberCard>
+
+            <CyberCard glow>
+              <DataMetric
+                label="Pool Utilization"
+                value="0%"
+                subValue="CAPACITY"
+                trend="neutral"
+              />
+            </CyberCard>
+
+            <CyberCard glow>
+              <DataMetric
+                label="System Status"
+                value="LIVE"
+                subValue="ALL SYSTEMS OPERATIONAL"
+                trend="up"
+              />
+            </CyberCard>
+          </div>
+
+          {/* Risk Meters */}
+          <CyberCard className="mb-8">
+            <h3 className="text-lg font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-6">
+              PARAMETRIC RISK ANALYSIS
+            </h3>
+            <div className="space-y-6">
+              <RiskMeter value={0} label="LIQUIDATION RISK" />
+              <RiskMeter value={0} label="ORACLE VARIANCE" />
+              <RiskMeter value={0} label="PROTOCOL UTILIZATION" />
+            </div>
+          </CyberCard>
+        </section>
+
+        {/* Main Grid Layout */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* LEFT - Network Status (spans 2 columns) */}
+          <div className="lg:col-span-2 space-y-6">
+            <NetworkStatus />
+
+            {/* Quick Actions */}
+            <CyberCard>
+              <h2 className="text-xl font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-6 flex items-center gap-2">
+                <span className="text-2xl">⚡</span>
+                QUICK ACTIONS
+              </h2>
+              <p className="text-dsrpt-cyan-secondary mb-6 font-mono text-sm">
+                {'//'} INITIALIZE PROTOCOL OPERATIONS
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <CyberButton variant="primary">
+                  CREATE POLICY
+                </CyberButton>
+                <CyberButton>
+                  FUND POOL
+                </CyberButton>
+                <CyberButton>
+                  ORACLE CHECK
+                </CyberButton>
+              </div>
+              <div className="mt-6 p-4 bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/20 rounded">
+                <p className="text-xs text-dsrpt-cyan-dark font-mono">
+                  &gt; AWAITING USER INPUT...<br />
+                  &gt; CONNECT WALLET TO ENABLE PROTOCOL INTERACTIONS
+                </p>
+              </div>
+            </CyberCard>
+          </div>
+
+          {/* RIGHT - Activity and Environment */}
+          <div className="space-y-6">
+            {/* Recent Activity */}
+            <CyberCard scan>
+              <h2 className="text-xl font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-6">
+                SYSTEM LOG
+              </h2>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-dsrpt-gray-800/50 border-l-2 border-dsrpt-success">
+                  <div className="w-2 h-2 bg-dsrpt-success rounded-full mt-1.5 animate-pulse-slow" />
+                  <div>
+                    <div className="text-xs text-dsrpt-cyan-primary font-mono">DEPLOYMENT</div>
+                    <div className="text-xs text-dsrpt-cyan-secondary mt-1">
+                      Contracts deployed & verified on Base
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-dsrpt-gray-800/50 border-l-2 border-dsrpt-success">
+                  <div className="w-2 h-2 bg-dsrpt-success rounded-full mt-1.5 animate-pulse-slow" />
+                  <div>
+                    <div className="text-xs text-dsrpt-cyan-primary font-mono">KEEPER</div>
+                    <div className="text-xs text-dsrpt-cyan-secondary mt-1">
+                      Keeper EOA online: 0x9813...B74
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-dsrpt-gray-800/50 border-l-2 border-dsrpt-success">
+                  <div className="w-2 h-2 bg-dsrpt-success rounded-full mt-1.5 animate-pulse-slow" />
+                  <div>
+                    <div className="text-xs text-dsrpt-cyan-primary font-mono">CONFIG</div>
+                    <div className="text-xs text-dsrpt-cyan-secondary mt-1">
+                      USDC on Base configured
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CyberCard>
+
+            {/* Environment */}
+            <CyberCard>
+              <h2 className="text-xl font-bold text-dsrpt-cyan-primary uppercase tracking-wider mb-6">
+                ENVIRONMENT
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-xs text-dsrpt-cyan-secondary uppercase tracking-wider mb-2">
+                    RPC ENDPOINT
+                  </div>
+                  <code className="block text-xs bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/20 rounded px-3 py-2 text-dsrpt-cyan-primary font-mono break-all">
+                    {rpc}
+                  </code>
+                </div>
+
+                <div>
+                  <div className="text-xs text-dsrpt-cyan-secondary uppercase tracking-wider mb-2">
+                    NETWORK
+                  </div>
+                  <code className="block text-xs bg-dsrpt-gray-800 border border-dsrpt-cyan-primary/20 rounded px-3 py-2 text-dsrpt-cyan-primary font-mono">
+                    Base (chainId 8453)
+                  </code>
+                </div>
+
+                <div className="pt-4 border-t border-dsrpt-cyan-primary/10">
+                  <div className="text-xs text-dsrpt-cyan-dark font-mono">
+                    &gt; PROTOCOL_VERSION: v1.0.0<br />
+                    &gt; STATUS: OPERATIONAL<br />
+                    &gt; UPTIME: 100%
+                  </div>
+                </div>
+              </div>
+            </CyberCard>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="mt-12 pt-8 border-t border-dsrpt-cyan-primary/10 text-center">
+          <p className="text-xs text-dsrpt-cyan-dark font-mono uppercase tracking-wider">
+            © {new Date().getFullYear()} DSRPT.FINANCE — PARAMETRIC RISK PROTOCOL — ALL SYSTEMS OPERATIONAL
+          </p>
         </footer>
       </div>
     </main>
