@@ -67,18 +67,25 @@ async function fetchOraclePrice(
   oracleAddress: Address,
   rpcUrl: string
 ): Promise<{ price: number; updatedAt: number; intensity: number }> {
-  const client = createPublicClient({
-    chain: base,
-    transport: http(rpcUrl),
-  });
-
   try {
-    const [priceRaw, updatedAt] = (await client.readContract({
+    const client = createPublicClient({
+      chain: base,
+      transport: http(rpcUrl, {
+        timeout: 10_000, // 10 second timeout
+        retryCount: 3,
+      }),
+    });
+
+    const result = await client.readContract({
       address: oracleAddress,
       abi: ORACLE_ABI,
       functionName: 'latestPrice',
       args: [USDC_ASSET_ID],
-    })) as [bigint, bigint];
+    });
+
+    // Result is a tuple [price, updatedAt]
+    const priceRaw = result[0];
+    const updatedAt = result[1];
 
     // Convert from 1e8 format (Chainlink standard)
     const price = Number(priceRaw) / 1e8;
@@ -90,8 +97,8 @@ async function fetchOraclePrice(
       intensity,
     };
   } catch (error) {
-    console.error('Error fetching oracle price:', error);
-    throw new Error('Failed to fetch oracle price');
+    console.error('Error in fetchOraclePrice:', error);
+    throw error;
   }
 }
 
@@ -128,7 +135,7 @@ export async function detectRegime(
       intensity: 0.01,
       price: 0.99,
       confidence: 'low',
-      updatedAt: Date.now() / 1000,
+      updatedAt: Math.floor(Date.now() / 1000),
       reason: 'No oracle configured - using default volatile regime',
     };
   }
@@ -137,7 +144,7 @@ export async function detectRegime(
     const { price, updatedAt, intensity } = await fetchOraclePrice(oracle, rpc);
 
     // Check staleness (if price is > 1 hour old, reduce confidence)
-    const now = Date.now() / 1000;
+    const now = Math.floor(Date.now() / 1000);
     const ageSeconds = now - updatedAt;
     const isStale = ageSeconds > 3600; // 1 hour
 
@@ -169,14 +176,16 @@ export async function detectRegime(
     };
   } catch (error) {
     console.error('Regime detection error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
     // Fallback to volatile on error (conservative)
     return {
       regime: 'volatile',
       intensity: 0.01,
       price: 0.99,
       confidence: 'low',
-      updatedAt: Date.now() / 1000,
-      reason: `Error fetching oracle data: ${error instanceof Error ? error.message : 'Unknown error'}. Defaulting to volatile.`,
+      updatedAt: Math.floor(Date.now() / 1000),
+      reason: `Error fetching oracle data: ${errorMessage}. Defaulting to volatile.`,
     };
   }
 }
