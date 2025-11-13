@@ -71,16 +71,16 @@ export default function PoliciesPage() {
     fetchPolicies();
   }, [isConnected, address, nextPolicyId]);
 
-  const getPolicyStatus = (policy: Policy) => {
+  const getPolicyStatus = (policy: Policy): { label: string; status: 'ok' | 'warn' | 'error' } => {
     const now = Math.floor(Date.now() / 1000);
 
     if (policy.resolved) {
-      return { label: 'RESOLVED', variant: 'neutral' as const };
+      return { label: 'RESOLVED', status: 'ok' as const };
     }
     if (Number(policy.endTs) > now) {
-      return { label: 'ACTIVE', variant: 'success' as const };
+      return { label: 'ACTIVE', status: 'ok' as const };
     }
-    return { label: 'EXPIRED', variant: 'warning' as const };
+    return { label: 'EXPIRED', status: 'warn' as const };
   };
 
   const formatDate = (timestamp: bigint) => {
@@ -229,7 +229,7 @@ export default function PoliciesPage() {
                       <div className="text-xs text-dsrpt-cyan-dark uppercase tracking-wider mb-1">
                         Status
                       </div>
-                      <StatusBadge variant={status.variant}>{status.label}</StatusBadge>
+                      <StatusBadge status={status.status} label={status.label} />
                     </div>
 
                     {/* Coverage */}
