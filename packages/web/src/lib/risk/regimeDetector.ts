@@ -176,7 +176,20 @@ export async function detectRegime(
     };
   } catch (error) {
     console.error('Regime detection error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    // Provide user-friendly error message
+    let userMessage = 'Oracle temporarily unavailable';
+
+    if (error instanceof Error) {
+      // Check for specific error types
+      if (error.message.includes('reverted')) {
+        userMessage = 'Oracle contract not initialized - using default pricing';
+      } else if (error.message.includes('timeout')) {
+        userMessage = 'Oracle request timed out';
+      } else if (error.message.includes('network')) {
+        userMessage = 'Network error connecting to oracle';
+      }
+    }
 
     // Fallback to volatile on error (conservative)
     return {
@@ -185,7 +198,7 @@ export async function detectRegime(
       price: 0.99,
       confidence: 'low',
       updatedAt: Math.floor(Date.now() / 1000),
-      reason: `Error fetching oracle data: ${errorMessage}. Defaulting to volatile.`,
+      reason: `${userMessage}. Using default volatile regime for pricing.`,
     };
   }
 }
