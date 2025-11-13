@@ -80,7 +80,7 @@ export default function Page() {
   };
 
   const handleFundPool = async (amount: bigint) => {
-    if (!isConnected) {
+    if (!isConnected || !address) {
       alert('Please connect your wallet first');
       return;
     }
@@ -100,13 +100,13 @@ export default function Page() {
       // Wait a bit for approval to confirm
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Then deposit
+      // Then deposit using ERC-4626 deposit(assets, receiver)
       setTxStatus('Depositing to pool...');
       const depositHash = await writeContractAsync({
         address: ADDRESSES.base.pool as Address,
         abi: liquidityPoolAbi,
         functionName: 'deposit',
-        args: [amount],
+        args: [amount, address], // ERC-4626: deposit(assets, receiver)
       });
 
       setTxStatus(`Deposit sent: ${depositHash.slice(0, 10)}...`);
