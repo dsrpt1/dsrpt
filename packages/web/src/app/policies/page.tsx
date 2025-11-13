@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { formatUnits, type Address } from 'viem';
 import { ADDRESSES } from '@/lib/addresses';
 import { policyManagerAbi } from '@/abis/policyManager';
@@ -109,7 +110,9 @@ export default function PoliciesPage() {
             <p className="text-dsrpt-cyan-secondary mb-8 font-mono">
               {'//'} CONNECT WALLET TO VIEW YOUR POLICIES
             </p>
-            <w3m-button />
+            <div className="flex justify-center">
+              <ConnectButton />
+            </div>
           </div>
         </div>
       </main>

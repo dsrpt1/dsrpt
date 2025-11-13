@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAccount, useReadContract, useWriteContract } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { formatUnits, parseUnits, type Address } from 'viem';
 import { ADDRESSES } from '@/lib/addresses';
 import { liquidityPoolAbi } from '@/abis/liquidityPool';
@@ -176,7 +177,9 @@ export default function PoolPage() {
             <p className="text-dsrpt-cyan-secondary mb-8 font-mono">
               {'//'} CONNECT WALLET TO MANAGE YOUR LP POSITION
             </p>
-            <w3m-button />
+            <div className="flex justify-center">
+              <ConnectButton />
+            </div>
           </div>
         </div>
       </main>
