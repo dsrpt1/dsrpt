@@ -334,7 +334,7 @@ export default function PoolPage() {
 
               <CyberButton
                 className="w-full"
-                disabled={loading || !withdrawAmount || (maxWithdrawAmount && parseUnits(withdrawAmount || '0', 6) > maxWithdrawAmount)}
+                disabled={loading || !withdrawAmount || !!(maxWithdrawAmount && parseUnits(withdrawAmount || '0', 6) > maxWithdrawAmount)}
               >
                 {loading ? 'Processing...' : 'Withdraw USDC'}
               </CyberButton>
