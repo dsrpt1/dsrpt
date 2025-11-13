@@ -164,6 +164,22 @@ export default function Page() {
         }).then(r => r.json()),
       ]);
 
+      // Check for RPC errors
+      if (priceData.error) {
+        throw new Error(`RPC Error: ${priceData.error.message || 'Failed to fetch price'}`);
+      }
+      if (threshold.error) {
+        throw new Error(`RPC Error: ${threshold.error.message || 'Failed to fetch threshold'}`);
+      }
+      if (maxStale.error) {
+        throw new Error(`RPC Error: ${maxStale.error.message || 'Failed to fetch maxStale'}`);
+      }
+
+      // Check if results exist
+      if (!priceData.result || !threshold.result || !maxStale.result) {
+        throw new Error('Invalid response from oracle - missing result data');
+      }
+
       // Parse results
       const price = parseInt(priceData.result.slice(0, 66), 16) / 1e8;
       const thresholdVal = parseInt(threshold.result, 16) / 1e8;
