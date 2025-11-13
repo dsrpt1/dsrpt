@@ -196,7 +196,7 @@ export default function PoliciesPage() {
                 No Policies Found
               </h3>
               <p className="text-dsrpt-cyan-secondary mb-6 font-mono text-sm">
-                {'//'} YOU HAVEN'T CREATED ANY POLICIES YET
+                {'//'} YOU HAVEN&apos;T CREATED ANY POLICIES YET
               </p>
               <Link href="/">
                 <CyberButton variant="primary">Create First Policy</CyberButton>

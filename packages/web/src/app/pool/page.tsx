@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { formatUnits, parseUnits, type Address } from 'viem';
 import { ADDRESSES } from '@/lib/addresses';
 import { liquidityPoolAbi } from '@/abis/liquidityPool';
@@ -115,9 +115,12 @@ export default function PoolPage() {
         setTxStatus('');
         setDepositAmount('100');
       }, 5000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Deposit error:', error);
-      setTxStatus('Error: ' + (error.shortMessage || error.message));
+      const errorMessage = error instanceof Error
+        ? error.message
+        : (error as { shortMessage?: string }).shortMessage || 'Transaction failed';
+      setTxStatus('Error: ' + errorMessage);
       setTimeout(() => setTxStatus(''), 5000);
     } finally {
       setLoading(false);
@@ -149,9 +152,12 @@ export default function PoolPage() {
         setTxStatus('');
         setWithdrawAmount('');
       }, 5000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Withdraw error:', error);
-      setTxStatus('Error: ' + (error.shortMessage || error.message));
+      const errorMessage = error instanceof Error
+        ? error.message
+        : (error as { shortMessage?: string }).shortMessage || 'Transaction failed';
+      setTxStatus('Error: ' + errorMessage);
       setTimeout(() => setTxStatus(''), 5000);
     } finally {
       setLoading(false);

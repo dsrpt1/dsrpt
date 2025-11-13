@@ -57,10 +57,11 @@ export async function GET(
       endTs: policy[4].toString(),
       resolved: policy[5],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching policy:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch policy';
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch policy' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
