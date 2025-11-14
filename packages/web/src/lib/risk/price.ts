@@ -32,7 +32,8 @@ export type PriceBreakdown = {
   CL: number;           // Capital Load
   LL: number;           // Liquidity Load
   O_H: number;          // Overhead
-  premium: number;      // Total Premium = EL + RL + CL + LL + O_H
+  MTM: number;          // MTM Risk Buffer (15% for hedging)
+  premium: number;      // Total Premium = (EL + RL + CL + LL + O_H) * 1.15
   utilization_after?: number;
   // Metadata for transparency
   metadata?: {
@@ -57,7 +58,7 @@ export type PricingKnobs = {
  * Core actuarial pricing function
  *
  * Computes premium as:
- * Premium = EL + RL + CL + LL + O/H
+ * Premium = (EL + RL + CL + LL + O/H) × 1.15
  *
  * Where:
  * - EL = L × p_trigger(T) × E[g(I) | I>u]
@@ -65,6 +66,7 @@ export type PricingKnobs = {
  * - CL = TVaR-based capital charge (optional)
  * - LL = (base_bps + slope_bps × util) × L / 10,000 (liquidity load)
  * - O/H = overhead_pct × EL (overhead)
+ * - MTM = 15% buffer for hedging hazard curve mark-to-market risk
  */
 export function pricePolicy(q: QuoteInput): PriceBreakdown {
   const { curve, regime, limitUSD: L, tenorDays, portfolio } = q;
@@ -131,8 +133,13 @@ export function pricePolicy(q: QuoteInput): PriceBreakdown {
   // --- Overhead (O/H) ---
   const O_H = knobs.overhead * EL;
 
-  // --- Total Premium ---
-  const premium = EL + RL + CL + LL + O_H;
+  // --- Total Premium (before buffer) ---
+  const basePremium = EL + RL + CL + LL + O_H;
+
+  // --- MTM Risk Buffer (15% for hedging hazard curve mark-to-market risk) ---
+  const mtmBuffer = 0.15; // 15% buffer for initial hedging
+  const MTM = basePremium * mtmBuffer;
+  const premium = basePremium + MTM;
 
   // --- Utilization After (toy model: linear increase) ---
   const headroom = portfolio.tvar99_headroom_usd || 10 * L;
@@ -144,6 +151,7 @@ export function pricePolicy(q: QuoteInput): PriceBreakdown {
     CL,
     LL,
     O_H,
+    MTM,
     premium,
     utilization_after,
     metadata: {

@@ -59,7 +59,8 @@ export type QuoteResponse =
  *     "CL": 0,
  *     "LL": 7200.00,
  *     "O_H": 1570.23,
- *     "premium": 54055.80,
+ *     "MTM": 8115.84,
+ *     "premium": 62171.64,
  *     "utilization_after": 0.505,
  *     "metadata": { ... }
  *   },
