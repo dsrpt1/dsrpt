@@ -3,7 +3,7 @@
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 
-const ORACLE_ADAPTER = '0x10392145F79222990D1aB50049bEB3749eb1983E';
+const ORACLE_ADAPTER = process.env.ORACLE_ADDRESS || process.env.NEXT_PUBLIC_DEPEG_ADAPTER || '0x3e28f67Ba8db79194c5A7dd602CA3B8d5CfA7FC6';
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://mainnet.base.org';
 const USDC_ASSET_ID = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
