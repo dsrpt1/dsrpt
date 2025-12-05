@@ -105,15 +105,42 @@ const RPC =
 
 const client = createPublicClient({
   chain: base,
-  transport: http(RPC, { batch: true }),
+  transport: http(RPC, { batch: true, retryCount: 3, retryDelay: 1000 }),
 });
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Retry helper with exponential backoff
+ * ────────────────────────────────────────────────────────────────────────────*/
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delayMs = 1000
+): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      const isRateLimit =
+        e instanceof Error &&
+        (e.message.includes("rate limit") || e.message.includes("429"));
+      if (isRateLimit && i < retries - 1) {
+        await new Promise((r) => setTimeout(r, delayMs * Math.pow(2, i)));
+      } else if (i === retries - 1) {
+        throw e;
+      }
+    }
+  }
+  throw lastError;
+}
 
 /* ──────────────────────────────────────────────────────────────────────────────
  * Helpers
  * ────────────────────────────────────────────────────────────────────────────*/
 async function codeSize(addr: Address): Promise<number> {
   try {
-    const code = await client.getBytecode({ address: addr });
+    const code = await withRetry(() => client.getBytecode({ address: addr }));
     return (code?.length ?? 0) / 2;
   } catch {
     return 0;
@@ -121,19 +148,21 @@ async function codeSize(addr: Address): Promise<number> {
 }
 
 async function erc20Balance(token: Address, holder: Address) {
-  const [dec, bal] = await Promise.all([
+  const dec = await withRetry(() =>
     client.readContract({
       address: token,
       abi: ERC20_ABI,
       functionName: "decimals",
-    }),
+    })
+  );
+  const bal = await withRetry(() =>
     client.readContract({
       address: token,
       abi: ERC20_ABI,
       functionName: "balanceOf",
       args: [holder],
-    }),
-  ]);
+    })
+  );
   return { raw: bal, formatted: formatUnits(bal, dec) };
 }
 
@@ -188,25 +217,29 @@ export async function runHealthCheck(): Promise<HealthReport> {
     },
   ];
 
-  // Read PM wiring (asset / pool / oracle)
+  // Read PM wiring (asset / pool / oracle) - sequential to avoid rate limits
   try {
-    const [asset, pool, oracle] = await Promise.all([
+    const asset = await withRetry(() =>
       client.readContract({
         address: A.pm as Address,
         abi: POLICY_MANAGER_ABI,
         functionName: "asset",
-      }),
+      })
+    );
+    const pool = await withRetry(() =>
       client.readContract({
         address: A.pm as Address,
         abi: POLICY_MANAGER_ABI,
         functionName: "pool",
-      }),
+      })
+    );
+    const oracle = await withRetry(() =>
       client.readContract({
         address: A.pm as Address,
         abi: POLICY_MANAGER_ABI,
         functionName: "oracle",
-      }),
-    ]);
+      })
+    );
 
     rows.push(
       {
@@ -228,11 +261,13 @@ export async function runHealthCheck(): Promise<HealthReport> {
       },
     );
   } catch (e: unknown) {
+    const hint = errorMessage(e);
+    const isRateLimit = hint.includes("rate limit") || hint.includes("429");
     rows.push({
       label: "PM wiring",
       value: "unreadable",
       badge: "error",
-      hint: errorMessage(e),
+      hint: isRateLimit ? "RPC rate limited - try again shortly" : hint,
     });
   }
 
@@ -245,33 +280,39 @@ export async function runHealthCheck(): Promise<HealthReport> {
       badge: "ok",
     });
   } catch (e: unknown) {
+    const hint = errorMessage(e);
+    const isRateLimit = hint.includes("rate limit") || hint.includes("429");
     rows.push({
       label: "Pool USDC balance",
       value: "unreadable",
       badge: "warn",
-      hint: errorMessage(e),
+      hint: isRateLimit ? "RPC rate limited - try again shortly" : hint,
     });
   }
 
-  // Adapter params
+  // Adapter params - read sequentially to avoid rate limits
   try {
-    const [keeper, threshold, maxStale] = await Promise.all([
+    const keeper = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
         abi: ADAPTER_ABI,
         functionName: "keeper",
-      }),
+      })
+    );
+    const threshold = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
         abi: ADAPTER_ABI,
         functionName: "threshold",
-      }),
+      })
+    );
+    const maxStale = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
         abi: ADAPTER_ABI,
         functionName: "maxStale",
-      }),
-    ]);
+      })
+    );
 
     const keeperBadge: Badge =
       A.keeper && keeper.toLowerCase() === A.keeper.toLowerCase()
@@ -299,18 +340,22 @@ export async function runHealthCheck(): Promise<HealthReport> {
       },
     );
   } catch (e: unknown) {
+    const hint = errorMessage(e);
+    const isRateLimit = hint.includes("rate limit") || hint.includes("429");
     rows.push({
       label: "Adapter params",
       value: "unreadable",
       badge: "warn",
-      hint: errorMessage(e),
+      hint: isRateLimit ? "RPC rate limited - try again shortly" : hint,
     });
   }
 
   // Keeper balance (optional visual)
   try {
     if (A.keeper && isAddress(A.keeper as Address)) {
-      const bal = await client.getBalance({ address: A.keeper as Address });
+      const bal = await withRetry(() =>
+        client.getBalance({ address: A.keeper as Address })
+      );
       const eth = Number(formatUnits(bal, 18));
       rows.push({
         label: "Keeper ETH",
@@ -320,11 +365,13 @@ export async function runHealthCheck(): Promise<HealthReport> {
       });
     }
   } catch (e: unknown) {
+    const hint = errorMessage(e);
+    const isRateLimit = hint.includes("rate limit") || hint.includes("429");
     rows.push({
       label: "Keeper ETH",
       value: "unreadable",
       badge: "warn",
-      hint: errorMessage(e),
+      hint: isRateLimit ? "RPC rate limited - try again shortly" : hint,
     });
   }
 
