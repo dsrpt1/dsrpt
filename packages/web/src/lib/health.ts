@@ -40,18 +40,18 @@ const ADAPTER_ABI = [
   },
   {
     type: "function",
-    name: "threshold",
+    name: "threshold1e8",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }],
-  }, // 1e8
+  },
   {
     type: "function",
     name: "maxStale",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }],
-  }, // seconds
+  },
 ] as const;
 
 const POLICY_MANAGER_ABI = [
@@ -307,11 +307,11 @@ export async function runHealthCheck(): Promise<HealthReport> {
       })
     );
     await delay(200);
-    const threshold = await withRetry(() =>
+    const threshold1e8 = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
         abi: ADAPTER_ABI,
-        functionName: "threshold",
+        functionName: "threshold1e8",
       })
     );
     await delay(200);
@@ -337,10 +337,10 @@ export async function runHealthCheck(): Promise<HealthReport> {
           keeperBadge === "warn" ? "Differs from expected" : undefined,
       },
       {
-        label: "Adapter.threshold",
-        value: `${Number(threshold) / 1e8}`,
+        label: "Adapter.threshold1e8",
+        value: `${Number(threshold1e8) / 1e8}`,
         badge: "ok",
-        hint: "USD peg threshold (1e8)",
+        hint: "USD peg threshold",
       },
       {
         label: "Adapter.maxStale",
