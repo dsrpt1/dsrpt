@@ -1,13 +1,10 @@
 // packages/web/src/lib/wagmi.ts
-import { createConfig, http } from 'wagmi'
-import { injected } from 'wagmi/connectors'
+import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { base } from 'wagmi/chains'
 
-export const config = createConfig({
+export const config = getDefaultConfig({
+  appName: 'DSRPT',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_ID || 'demo',
   chains: [base],
-  connectors: [injected()],
-  transports: {
-    [base.id]: http(process.env.NEXT_PUBLIC_RPC_URL || 'https://mainnet.base.org'),
-  },
   ssr: true,
 })

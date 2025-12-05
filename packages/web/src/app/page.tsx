@@ -1,15 +1,17 @@
 // packages/web/src/app/page.tsx
 'use client';
 
+import { useState } from 'react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount } from 'wagmi';
 import NetworkStatus from '@/components/NetworkStatus';
-import { useEffect, useState } from 'react';
+import FundPoolModal from '@/components/FundPoolModal';
+import CreatePolicyModal from '@/components/CreatePolicyModal';
 
 export default function Page() {
-  const [rpc, setRpc] = useState<string>('');
-
-  useEffect(() => {
-    setRpc(process.env.NEXT_PUBLIC_BASE_RPC ?? 'not set');
-  }, []);
+  const { isConnected } = useAccount();
+  const [fundPoolOpen, setFundPoolOpen] = useState(false);
+  const [createPolicyOpen, setCreatePolicyOpen] = useState(false);
 
   return (
     <main
@@ -36,6 +38,7 @@ export default function Page() {
             gap: 16,
             paddingBottom: 16,
             borderBottom: '1px solid rgba(0, 212, 255, 0.15)',
+            flexWrap: 'wrap',
           }}
         >
           <div>
@@ -57,29 +60,32 @@ export default function Page() {
               Depeg Protection Protocol on Base
             </p>
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              background: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: 24,
-              fontSize: 13,
-              color: '#4ade80',
-            }}
-          >
-            <span
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: '#22c55e',
-                boxShadow: '0 0 8px #22c55e',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 16px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: 24,
+                fontSize: 13,
+                color: '#4ade80',
               }}
-            />
-            Mainnet Live
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: '#22c55e',
+                  boxShadow: '0 0 8px #22c55e',
+                }}
+              />
+              Mainnet Live
+            </div>
+            <ConnectButton />
           </div>
         </header>
 
@@ -115,45 +121,57 @@ export default function Page() {
             </div>
             <div style={{ display: 'grid', gap: 12 }}>
               <button
-                disabled
+                onClick={() => setCreatePolicyOpen(true)}
+                disabled={!isConnected}
                 style={{
-                  padding: '12px 16px',
-                  background: 'rgba(0, 212, 255, 0.1)',
-                  border: '1px solid rgba(0, 212, 255, 0.2)',
+                  padding: '14px 16px',
+                  background: isConnected
+                    ? 'linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%)'
+                    : 'rgba(0, 212, 255, 0.05)',
+                  border: '1px solid rgba(0, 212, 255, 0.3)',
                   borderRadius: 12,
-                  color: 'var(--text-secondary)',
-                  cursor: 'not-allowed',
+                  color: isConnected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: isConnected ? 'pointer' : 'not-allowed',
                   textAlign: 'left',
                   fontSize: 14,
+                  transition: 'all 0.2s ease',
                 }}
               >
-                Create Protection Policy
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🛡️ Create Protection Policy
+                </span>
                 <span style={{ display: 'block', fontSize: 12, marginTop: 4, opacity: 0.6 }}>
-                  Coming soon
+                  {isConnected ? 'Get coverage against USDC depeg' : 'Connect wallet to continue'}
                 </span>
               </button>
               <button
-                disabled
+                onClick={() => setFundPoolOpen(true)}
+                disabled={!isConnected}
                 style={{
-                  padding: '12px 16px',
-                  background: 'rgba(168, 85, 247, 0.1)',
-                  border: '1px solid rgba(168, 85, 247, 0.2)',
+                  padding: '14px 16px',
+                  background: isConnected
+                    ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(0, 212, 255, 0.15) 100%)'
+                    : 'rgba(168, 85, 247, 0.05)',
+                  border: '1px solid rgba(168, 85, 247, 0.3)',
                   borderRadius: 12,
-                  color: 'var(--text-secondary)',
-                  cursor: 'not-allowed',
+                  color: isConnected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: isConnected ? 'pointer' : 'not-allowed',
                   textAlign: 'left',
                   fontSize: 14,
+                  transition: 'all 0.2s ease',
                 }}
               >
-                Fund Liquidity Pool
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  💰 Fund Liquidity Pool
+                </span>
                 <span style={{ display: 'block', fontSize: 12, marginTop: 4, opacity: 0.6 }}>
-                  Coming soon
+                  {isConnected ? 'Deposit USDC to earn yield' : 'Connect wallet to continue'}
                 </span>
               </button>
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Protocol Stats */}
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div
@@ -170,13 +188,14 @@ export default function Page() {
               >
                 📊
               </div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Recent Activity</h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Protocol Info</h2>
             </div>
             <div style={{ display: 'grid', gap: 12 }}>
               {[
-                { text: 'Contracts deployed & verified on Base', time: 'Live' },
-                { text: 'Keeper EOA configured: 0x9813...B74', time: 'Active' },
-                { text: 'Oracle adapter connected to Chainlink', time: 'Synced' },
+                { label: 'Network', value: 'Base Mainnet' },
+                { label: 'Asset', value: 'USDC' },
+                { label: 'Oracle', value: 'Chainlink USDC/USD' },
+                { label: 'Depeg Threshold', value: '< $0.98' },
               ].map((item, i) => (
                 <div
                   key={i}
@@ -185,27 +204,27 @@ export default function Page() {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '10px 0',
-                    borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    borderBottom: i < 3 ? '1px solid rgba(255,255,255,0.05)' : 'none',
                   }}
                 >
-                  <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{item.text}</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{item.label}</span>
                   <span
                     style={{
-                      fontSize: 12,
+                      fontSize: 13,
                       padding: '4px 10px',
-                      background: 'rgba(34, 197, 94, 0.1)',
-                      color: '#4ade80',
+                      background: 'rgba(0, 212, 255, 0.1)',
+                      color: 'var(--accent-cyan)',
                       borderRadius: 6,
                     }}
                   >
-                    {item.time}
+                    {item.value}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Environment */}
+          {/* How it Works */}
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div
@@ -220,61 +239,39 @@ export default function Page() {
                   fontSize: 18,
                 }}
               >
-                🔧
+                💡
               </div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Environment</h2>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>How It Works</h2>
             </div>
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: 12,
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: 8,
-                }}
-              >
-                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Network</span>
-                <code
-                  style={{
-                    background: 'rgba(0, 212, 255, 0.1)',
-                    padding: '4px 10px',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    color: 'var(--accent-cyan)',
-                  }}
-                >
-                  Base (8453)
-                </code>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: 12,
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: 8,
-                }}
-              >
-                <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>RPC</span>
-                <code
-                  style={{
-                    background: 'rgba(168, 85, 247, 0.1)',
-                    padding: '4px 10px',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    color: 'var(--accent-purple)',
-                    maxWidth: 180,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {rpc || 'loading...'}
-                </code>
-              </div>
+            <div style={{ display: 'grid', gap: 16 }}>
+              {[
+                { step: '1', title: 'Buy Protection', desc: 'Pay a premium to protect against USDC depeg' },
+                { step: '2', title: 'Monitor Price', desc: 'Chainlink oracle tracks USDC/USD price 24/7' },
+                { step: '3', title: 'Get Paid', desc: 'If USDC drops below $0.98, claim your payout' },
+              ].map((item) => (
+                <div key={item.step} style={{ display: 'flex', gap: 12 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {item.step}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{item.desc}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -293,6 +290,10 @@ export default function Page() {
           © {new Date().getFullYear()} DSRPT.finance — Depeg Protection Protocol
         </footer>
       </div>
+
+      {/* Modals */}
+      <FundPoolModal isOpen={fundPoolOpen} onClose={() => setFundPoolOpen(false)} />
+      <CreatePolicyModal isOpen={createPolicyOpen} onClose={() => setCreatePolicyOpen(false)} />
     </main>
   );
 }
