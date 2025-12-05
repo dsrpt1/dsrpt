@@ -111,10 +111,12 @@ const client = createPublicClient({
 /* ──────────────────────────────────────────────────────────────────────────────
  * Retry helper with exponential backoff
  * ────────────────────────────────────────────────────────────────────────────*/
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function withRetry<T>(
   fn: () => Promise<T>,
-  retries = 3,
-  delayMs = 1000
+  retries = 4,
+  delayMs = 2000
 ): Promise<T> {
   let lastError: unknown;
   for (let i = 0; i < retries; i++) {
@@ -126,7 +128,7 @@ async function withRetry<T>(
         e instanceof Error &&
         (e.message.includes("rate limit") || e.message.includes("429"));
       if (isRateLimit && i < retries - 1) {
-        await new Promise((r) => setTimeout(r, delayMs * Math.pow(2, i)));
+        await delay(delayMs * Math.pow(2, i));
       } else if (i === retries - 1) {
         throw e;
       }
@@ -155,6 +157,7 @@ async function erc20Balance(token: Address, holder: Address) {
       functionName: "decimals",
     })
   );
+  await delay(200);
   const bal = await withRetry(() =>
     client.readContract({
       address: token,
@@ -217,8 +220,9 @@ export async function runHealthCheck(): Promise<HealthReport> {
     },
   ];
 
-  // Read PM wiring (asset / pool / oracle) - sequential to avoid rate limits
+  // Read PM wiring (asset / pool / oracle) - sequential with delays to avoid rate limits
   try {
+    await delay(200);
     const asset = await withRetry(() =>
       client.readContract({
         address: A.pm as Address,
@@ -226,6 +230,7 @@ export async function runHealthCheck(): Promise<HealthReport> {
         functionName: "asset",
       })
     );
+    await delay(200);
     const pool = await withRetry(() =>
       client.readContract({
         address: A.pm as Address,
@@ -233,6 +238,7 @@ export async function runHealthCheck(): Promise<HealthReport> {
         functionName: "pool",
       })
     );
+    await delay(200);
     const oracle = await withRetry(() =>
       client.readContract({
         address: A.pm as Address,
@@ -290,8 +296,9 @@ export async function runHealthCheck(): Promise<HealthReport> {
     });
   }
 
-  // Adapter params - read sequentially to avoid rate limits
+  // Adapter params - read sequentially with delays to avoid rate limits
   try {
+    await delay(200);
     const keeper = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
@@ -299,6 +306,7 @@ export async function runHealthCheck(): Promise<HealthReport> {
         functionName: "keeper",
       })
     );
+    await delay(200);
     const threshold = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
@@ -306,6 +314,7 @@ export async function runHealthCheck(): Promise<HealthReport> {
         functionName: "threshold",
       })
     );
+    await delay(200);
     const maxStale = await withRetry(() =>
       client.readContract({
         address: A.adapter as Address,
