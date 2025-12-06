@@ -1,9 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits } from 'viem'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
+import { parseUnits, formatUnits, keccak256, toHex } from 'viem'
 import { ADDRESSES } from '@/lib/addresses'
-import { POLICY_MANAGER_ABI } from '@/lib/abis'
+import { POLICY_MANAGER_ABI, HAZARD_CURVE_ABI } from '@/lib/abis'
 
 type Props = {
   isOpen: boolean
@@ -11,17 +11,43 @@ type Props = {
 }
 
 const DURATION_OPTIONS = [
-  { label: '7 days', value: 7 * 24 * 60 * 60 },
-  { label: '14 days', value: 14 * 24 * 60 * 60 },
-  { label: '30 days', value: 30 * 24 * 60 * 60 },
+  { label: '7 days', value: 7, seconds: 7 * 24 * 60 * 60 },
+  { label: '14 days', value: 14, seconds: 14 * 24 * 60 * 60 },
+  { label: '30 days', value: 30, seconds: 30 * 24 * 60 * 60 },
 ]
+
+// Default curve ID for USDC depeg protection
+const USDC_CURVE_ID = keccak256(toHex('USDC_DEPEG'))
 
 export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   const [payout, setPayout] = useState('')
-  const [premium, setPremium] = useState('')
-  const [duration, setDuration] = useState(DURATION_OPTIONS[0].value)
+  const [duration, setDuration] = useState(DURATION_OPTIONS[0])
   const { address } = useAccount()
   const A = ADDRESSES.base
+
+  // Calculate coverage in base units (6 decimals for USDC)
+  const coverageBn = payout ? parseUnits(payout, 6) : BigInt(0)
+
+  // Fetch premium from HazardCurveEngine
+  const { data: calculatedPremium, isLoading: premiumLoading } = useReadContract({
+    address: A.curve as `0x${string}`,
+    abi: HAZARD_CURVE_ABI,
+    functionName: 'premiumOf',
+    args: [USDC_CURVE_ID, coverageBn, BigInt(duration.value)],
+    query: { enabled: coverageBn > 0 },
+  })
+
+  // Fetch curve parameters for display
+  const { data: curveParams } = useReadContract({
+    address: A.curve as `0x${string}`,
+    abi: HAZARD_CURVE_ABI,
+    functionName: 'curves',
+    args: [USDC_CURVE_ID],
+  })
+
+  // Format premium for display
+  const premiumFormatted = calculatedPremium ? formatUnits(calculatedPremium, 6) : '0'
+  const premiumBps = curveParams ? Number(curveParams[2]) : 0 // minPremiumBps
 
   // Create policy transaction
   const { writeContract, data: txHash, isPending } = useWriteContract()
@@ -30,28 +56,24 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   })
 
   const handleCreate = () => {
-    if (!premium || !payout) return
+    if (!calculatedPremium || !payout) return
     writeContract({
       address: A.pm as `0x${string}`,
       abi: POLICY_MANAGER_ABI,
       functionName: 'createPolicy',
       args: [
-        parseUnits(premium, 6),  // premium in USDC (6 decimals)
-        parseUnits(payout, 6),   // payout in USDC (6 decimals)
-        BigInt(duration),
+        calculatedPremium,        // premium from curve
+        coverageBn,               // payout in USDC (6 decimals)
+        BigInt(duration.seconds),
       ],
     })
   }
 
   const handleClose = () => {
     setPayout('')
-    setPremium('')
-    setDuration(DURATION_OPTIONS[0].value)
+    setDuration(DURATION_OPTIONS[0])
     onClose()
   }
-
-  // Auto-calculate suggested premium (naive: 5% of payout)
-  const suggestedPremium = payout ? (parseFloat(payout) * 0.05).toFixed(2) : ''
 
   if (!isOpen) return null
 
@@ -108,11 +130,13 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Coverage</span>
                 <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{payout} USDC</span>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Premium Paid</span>
+                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{premiumFormatted} USDC</span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Duration</span>
-                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>
-                  {DURATION_OPTIONS.find(d => d.value === duration)?.label}
-                </span>
+                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{duration.label}</span>
               </div>
             </div>
             <button
@@ -142,13 +166,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               <input
                 type="number"
                 value={payout}
-                onChange={(e) => {
-                  setPayout(e.target.value)
-                  // Auto-set suggested premium
-                  if (e.target.value) {
-                    setPremium((parseFloat(e.target.value) * 0.05).toFixed(2))
-                  }
-                }}
+                onChange={(e) => setPayout(e.target.value)}
                 placeholder="1000"
                 style={{
                   width: '100%',
@@ -166,32 +184,6 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </div>
             </div>
 
-            {/* Premium */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
-                Premium (USDC)
-              </label>
-              <input
-                type="number"
-                value={premium}
-                onChange={(e) => setPremium(e.target.value)}
-                placeholder={suggestedPremium || '50'}
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  background: 'rgba(0, 0, 0, 0.3)',
-                  border: '1px solid rgba(168, 85, 247, 0.2)',
-                  borderRadius: 12,
-                  color: 'var(--text-primary)',
-                  fontSize: 16,
-                  outline: 'none',
-                }}
-              />
-              <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 12 }}>
-                One-time payment for protection (~5% suggested)
-              </div>
-            </div>
-
             {/* Duration */}
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -201,18 +193,18 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 {DURATION_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => setDuration(opt.value)}
+                    onClick={() => setDuration(opt)}
                     style={{
                       flex: 1,
                       padding: '12px',
-                      background: duration === opt.value
+                      background: duration.value === opt.value
                         ? 'rgba(0, 212, 255, 0.2)'
                         : 'rgba(0, 0, 0, 0.2)',
-                      border: duration === opt.value
+                      border: duration.value === opt.value
                         ? '1px solid rgba(0, 212, 255, 0.5)'
                         : '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: 8,
-                      color: duration === opt.value ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                      color: duration.value === opt.value ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                       fontSize: 14,
                       cursor: 'pointer',
                     }}
@@ -223,30 +215,67 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </div>
             </div>
 
+            {/* Premium Display - Calculated from Hazard Curve */}
+            <div style={{
+              marginBottom: 20,
+              padding: 16,
+              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%)',
+              border: '1px solid rgba(0, 212, 255, 0.2)',
+              borderRadius: 12,
+            }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                Risk-Based Premium
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div>
+                  {premiumLoading ? (
+                    <span style={{ color: 'var(--text-secondary)' }}>Calculating...</span>
+                  ) : payout ? (
+                    <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                      {premiumFormatted} USDC
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-secondary)' }}>Enter coverage amount</span>
+                  )}
+                </div>
+                {premiumBps > 0 && payout && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {(premiumBps / 100).toFixed(2)}% of coverage
+                  </div>
+                )}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                Premium calculated from hazard curve based on risk parameters
+              </div>
+            </div>
+
             {/* Summary */}
-            {payout && premium && (
+            {payout && calculatedPremium && (
               <div style={{
                 marginBottom: 20,
                 padding: 16,
-                background: 'rgba(0, 212, 255, 0.05)',
-                border: '1px solid rgba(0, 212, 255, 0.1)',
+                background: 'rgba(0, 0, 0, 0.2)',
                 borderRadius: 12,
               }}>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Summary</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'var(--text-muted)' }}>You pay</span>
-                  <span style={{ color: 'var(--accent-purple)' }}>{premium} USDC</span>
+                  <span style={{ color: 'var(--accent-purple)' }}>{premiumFormatted} USDC</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'var(--text-muted)' }}>You receive if depeg</span>
                   <span style={{ color: 'var(--accent-cyan)' }}>{payout} USDC</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Protection period</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{duration.label}</span>
                 </div>
               </div>
             )}
 
             <button
               onClick={handleCreate}
-              disabled={!premium || !payout || isPending || waiting}
+              disabled={!calculatedPremium || !payout || isPending || waiting}
               style={{
                 width: '100%',
                 padding: '14px',
@@ -259,7 +288,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 fontSize: 16,
                 fontWeight: 600,
                 cursor: isPending || waiting ? 'wait' : 'pointer',
-                opacity: (!premium || !payout) ? 0.5 : 1,
+                opacity: (!calculatedPremium || !payout) ? 0.5 : 1,
               }}
             >
               {isPending || waiting ? 'Creating Policy...' : 'Create Policy'}

@@ -78,6 +78,31 @@ export const POLICY_MANAGER_ABI = [
   },
 ] as const
 
+export const HAZARD_CURVE_ABI = [
+  {
+    type: 'function',
+    name: 'premiumOf',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'id', type: 'bytes32' },
+      { name: 'coverage', type: 'uint256' },
+      { name: 'tenorDays', type: 'uint256' },
+    ],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'curves',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'bytes32' }],
+    outputs: [
+      { name: 'baseProbPerDay', type: 'uint256' },
+      { name: 'slopePerDay', type: 'uint256' },
+      { name: 'minPremiumBps', type: 'uint256' },
+    ],
+  },
+] as const
+
 export const ERC20_ABI = [
   {
     type: 'function',
