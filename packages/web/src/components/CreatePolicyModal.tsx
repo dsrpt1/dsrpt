@@ -19,10 +19,13 @@ const DURATION_OPTIONS = [
 // Default curve ID for USDC depeg protection
 const USDC_CURVE_ID = keccak256(toHex('USDC_DEPEG'))
 
+// Fallback premium rate in basis points (5% = 500 bps) when curve not initialized
+const FALLBACK_PREMIUM_BPS = 500n
+
 export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   const [payout, setPayout] = useState('')
   const [duration, setDuration] = useState(DURATION_OPTIONS[0])
-  const { address } = useAccount()
+  useAccount() // ensure wallet is connected
   const A = ADDRESSES.base
 
   // Calculate coverage in base units (6 decimals for USDC)
@@ -45,9 +48,23 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
     args: [USDC_CURVE_ID],
   })
 
+  // Check if curve is initialized (minPremiumBps > 0)
+  const curveInitialized = curveParams && Number(curveParams[2]) > 0
+
+  // Use curve premium if initialized, otherwise use fallback
+  const effectivePremium = (() => {
+    if (!coverageBn || coverageBn === 0n) return 0n
+    if (curveInitialized && calculatedPremium && calculatedPremium > 0n) {
+      return calculatedPremium
+    }
+    // Fallback: 5% of coverage
+    return (coverageBn * FALLBACK_PREMIUM_BPS) / 10000n
+  })()
+
   // Format premium for display
-  const premiumFormatted = calculatedPremium ? formatUnits(calculatedPremium, 6) : '0'
-  const premiumBps = curveParams ? Number(curveParams[2]) : 0 // minPremiumBps
+  const premiumFormatted = effectivePremium > 0n ? formatUnits(effectivePremium, 6) : '0'
+  const premiumBps = curveInitialized ? Number(curveParams[2]) : Number(FALLBACK_PREMIUM_BPS)
+  const usingFallback = !curveInitialized && coverageBn > 0n
 
   // Create policy transaction
   const { writeContract, data: txHash, isPending } = useWriteContract()
@@ -56,13 +73,13 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   })
 
   const handleCreate = () => {
-    if (!calculatedPremium || !payout) return
+    if (!effectivePremium || !payout) return
     writeContract({
       address: A.pm as `0x${string}`,
       abi: POLICY_MANAGER_ABI,
       functionName: 'createPolicy',
       args: [
-        calculatedPremium,        // premium from curve
+        effectivePremium,         // premium from curve or fallback
         coverageBn,               // payout in USDC (6 decimals)
         BigInt(duration.seconds),
       ],
@@ -219,19 +236,23 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
             <div style={{
               marginBottom: 20,
               padding: 16,
-              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%)',
-              border: '1px solid rgba(0, 212, 255, 0.2)',
+              background: usingFallback
+                ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.08) 0%, rgba(245, 158, 11, 0.08) 100%)'
+                : 'linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%)',
+              border: usingFallback
+                ? '1px solid rgba(251, 191, 36, 0.3)'
+                : '1px solid rgba(0, 212, 255, 0.2)',
               borderRadius: 12,
             }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                Risk-Based Premium
+                {usingFallback ? 'Default Premium Rate' : 'Risk-Based Premium'}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div>
                   {premiumLoading ? (
                     <span style={{ color: 'var(--text-secondary)' }}>Calculating...</span>
                   ) : payout ? (
-                    <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    <span style={{ fontSize: 24, fontWeight: 700, color: usingFallback ? '#fbbf24' : 'var(--accent-cyan)' }}>
                       {premiumFormatted} USDC
                     </span>
                   ) : (
@@ -244,13 +265,16 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                   </div>
                 )}
               </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                Premium calculated from hazard curve based on risk parameters
+              <div style={{ marginTop: 8, fontSize: 11, color: usingFallback ? '#fbbf24' : 'var(--text-muted)' }}>
+                {usingFallback
+                  ? 'Using default rate - hazard curve not yet initialized on-chain'
+                  : 'Premium calculated from hazard curve based on risk parameters'
+                }
               </div>
             </div>
 
             {/* Summary */}
-            {payout && calculatedPremium && (
+            {payout && effectivePremium > 0n && (
               <div style={{
                 marginBottom: 20,
                 padding: 16,
@@ -275,7 +299,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
 
             <button
               onClick={handleCreate}
-              disabled={!calculatedPremium || !payout || isPending || waiting}
+              disabled={!effectivePremium || !payout || isPending || waiting}
               style={{
                 width: '100%',
                 padding: '14px',
@@ -288,7 +312,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 fontSize: 16,
                 fontWeight: 600,
                 cursor: isPending || waiting ? 'wait' : 'pointer',
-                opacity: (!calculatedPremium || !payout) ? 0.5 : 1,
+                opacity: (!effectivePremium || !payout) ? 0.5 : 1,
               }}
             >
               {isPending || waiting ? 'Creating Policy...' : 'Create Policy'}
