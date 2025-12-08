@@ -48,8 +48,10 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
     args: [USDC_CURVE_ID],
   })
 
-  // Check if curve is initialized (minPremiumBps > 0)
-  const curveInitialized = curveParams && Number(curveParams[2]) > 0
+  // Check if curve is initialized and active
+  // curves returns: [baseProbPerDay, slopePerDay, minPremiumBps, maxMultiplierBps, pegThresholdBps, oracleStaleAfter, active]
+  const curveActive = curveParams && curveParams[6] === true
+  const curveInitialized = curveActive && (Number(curveParams[0]) > 0 || Number(curveParams[2]) > 0)
 
   // Use curve premium if initialized, otherwise use fallback
   const effectivePremium = (() => {

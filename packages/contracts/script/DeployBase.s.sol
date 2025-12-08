@@ -29,8 +29,8 @@ contract DeployBase is Script {
 
         vm.startBroadcast(pk);
 
-        // 1) curve
-        HazardCurveEngine curve = new HazardCurveEngine();
+        // 1) curve (with Chainlink price feed for dynamic risk multiplier)
+        HazardCurveEngine curve = new HazardCurveEngine(feed);
 
         // 2) pool
         LiquidityPool pool = new LiquidityPool(IERC20(usdc));
