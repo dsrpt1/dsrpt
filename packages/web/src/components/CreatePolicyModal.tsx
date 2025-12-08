@@ -1,9 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
-import { parseUnits, formatUnits, keccak256, toHex } from 'viem'
-import { ADDRESSES } from '@/lib/addresses'
-import { POLICY_MANAGER_ABI, HAZARD_CURVE_ABI } from '@/lib/abis'
+import { parseUnits, formatUnits } from 'viem'
+import { ADDRESSES, PERIL_IDS } from '@/lib/addresses'
+import { POLICY_MANAGER_ABI, HAZARD_ENGINE_ABI, ERC20_ABI } from '@/lib/abis'
 
 type Props = {
   isOpen: boolean
@@ -11,88 +11,125 @@ type Props = {
 }
 
 const DURATION_OPTIONS = [
-  { label: '7 days', value: 7, seconds: 7 * 24 * 60 * 60 },
-  { label: '14 days', value: 14, seconds: 14 * 24 * 60 * 60 },
-  { label: '30 days', value: 30, seconds: 30 * 24 * 60 * 60 },
+  { label: '7 days', value: 7 },
+  { label: '14 days', value: 14 },
+  { label: '30 days', value: 30 },
+  { label: '90 days', value: 90 },
 ]
 
-// Default curve ID for USDC depeg protection
-const USDC_CURVE_ID = keccak256(toHex('USDC_DEPEG'))
+// Regime labels for display
+const REGIME_LABELS = ['Calm', 'Volatile', 'Crisis'] as const
 
-// Fallback premium rate in basis points (5% = 500 bps) when curve not initialized
+// Fallback premium rate in basis points (5% = 500 bps) when engine not initialized
 const FALLBACK_PREMIUM_BPS = 500n
 
 export default function CreatePolicyModal({ isOpen, onClose }: Props) {
-  const [payout, setPayout] = useState('')
+  const [coverage, setCoverage] = useState('')
   const [duration, setDuration] = useState(DURATION_OPTIONS[0])
-  useAccount() // ensure wallet is connected
+  const [step, setStep] = useState<'input' | 'approve' | 'create'>('input')
+  const { address } = useAccount()
   const A = ADDRESSES.base
 
   // Calculate coverage in base units (6 decimals for USDC)
-  const coverageBn = payout ? parseUnits(payout, 6) : BigInt(0)
+  const coverageBn = coverage ? parseUnits(coverage, 6) : 0n
 
-  // Fetch premium from HazardCurveEngine
+  // Fetch premium from HazardEngine using new interface
+  // quotePremium(perilId, tenorDays, limitUSD)
   const { data: calculatedPremium, isLoading: premiumLoading } = useReadContract({
-    address: A.curve as `0x${string}`,
-    abi: HAZARD_CURVE_ABI,
-    functionName: 'premiumOf',
-    args: [USDC_CURVE_ID, coverageBn, BigInt(duration.value)],
-    query: { enabled: coverageBn > 0 },
+    address: A.hazardEngine as `0x${string}`,
+    abi: HAZARD_ENGINE_ABI,
+    functionName: 'quotePremium',
+    args: [PERIL_IDS.USDC_DEPEG as `0x${string}`, BigInt(duration.value), coverageBn],
+    query: { enabled: coverageBn > 0n },
   })
 
-  // Fetch curve parameters for display
-  const { data: curveParams } = useReadContract({
-    address: A.curve as `0x${string}`,
-    abi: HAZARD_CURVE_ABI,
-    functionName: 'curves',
-    args: [USDC_CURVE_ID],
+  // Fetch current regime for display
+  const { data: currentRegime } = useReadContract({
+    address: A.hazardEngine as `0x${string}`,
+    abi: HAZARD_ENGINE_ABI,
+    functionName: 'getCurrentRegime',
+    args: [PERIL_IDS.USDC_DEPEG as `0x${string}`],
   })
 
-  // Check if curve is initialized and active
-  // curves returns: [baseProbPerDay, slopePerDay, minPremiumBps, maxMultiplierBps, pegThresholdBps, oracleStaleAfter, active]
-  const curveActive = curveParams && curveParams[6] === true
-  const curveInitialized = curveActive && (Number(curveParams[0]) > 0 || Number(curveParams[2]) > 0)
+  // Check USDC allowance for PolicyManager
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: A.usdc as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: address ? [address, A.policyManager as `0x${string}`] : undefined,
+    query: { enabled: !!address },
+  })
 
-  // Use curve premium if initialized, otherwise use fallback
+  // Use contract premium if available, otherwise fallback
   const effectivePremium = (() => {
     if (!coverageBn || coverageBn === 0n) return 0n
-    if (curveInitialized && calculatedPremium && calculatedPremium > 0n) {
+    if (calculatedPremium && calculatedPremium > 0n) {
       return calculatedPremium
     }
     // Fallback: 5% of coverage
     return (coverageBn * FALLBACK_PREMIUM_BPS) / 10000n
   })()
 
-  // Format premium for display
-  const premiumFormatted = effectivePremium > 0n ? formatUnits(effectivePremium, 6) : '0'
-  const premiumBps = curveInitialized ? Number(curveParams[2]) : Number(FALLBACK_PREMIUM_BPS)
-  const usingFallback = !curveInitialized && coverageBn > 0n
+  const usingFallback = !calculatedPremium && coverageBn > 0n
+  const needsApproval = allowance !== undefined && effectivePremium > allowance
 
-  // Create policy transaction
-  const { writeContract, data: txHash, isPending } = useWriteContract()
-  const { isLoading: waiting, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
+  // Approve USDC
+  const { writeContract: approve, data: approveTx, isPending: approving } = useWriteContract()
+  const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({
+    hash: approveTx,
   })
 
+  // Issue policy transaction
+  const { writeContract: issuePolicy, data: policyTx, isPending: issuingPolicy } = useWriteContract()
+  const { isLoading: waitingPolicy, isSuccess: policySuccess } = useWaitForTransactionReceipt({
+    hash: policyTx,
+  })
+
+  // Refetch allowance after approval
+  if (approveSuccess && step === 'approve') {
+    refetchAllowance()
+    setStep('create')
+  }
+
+  const handleApprove = () => {
+    if (!effectivePremium) return
+    setStep('approve')
+    approve({
+      address: A.usdc as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [A.policyManager as `0x${string}`, effectivePremium],
+    })
+  }
+
   const handleCreate = () => {
-    if (!effectivePremium || !payout) return
-    writeContract({
-      address: A.pm as `0x${string}`,
+    if (!effectivePremium || !coverage || !address) return
+    setStep('create')
+    issuePolicy({
+      address: A.policyManager as `0x${string}`,
       abi: POLICY_MANAGER_ABI,
-      functionName: 'createPolicy',
+      functionName: 'issueFixedPolicy',
       args: [
-        effectivePremium,         // premium from curve or fallback
-        coverageBn,               // payout in USDC (6 decimals)
-        BigInt(duration.seconds),
+        PERIL_IDS.USDC_DEPEG as `0x${string}`,
+        address,
+        coverageBn,
+        duration.value,
       ],
     })
   }
 
   const handleClose = () => {
-    setPayout('')
+    setCoverage('')
     setDuration(DURATION_OPTIONS[0])
+    setStep('input')
     onClose()
   }
+
+  // Format premium for display
+  const premiumFormatted = effectivePremium > 0n ? formatUnits(effectivePremium, 6) : '0'
+  const premiumPercent = coverageBn > 0n
+    ? ((Number(effectivePremium) / Number(coverageBn)) * 100).toFixed(2)
+    : '0'
 
   if (!isOpen) return null
 
@@ -114,7 +151,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
         className="card"
         style={{
           width: '100%',
-          maxWidth: 420,
+          maxWidth: 440,
           padding: 24,
           margin: 16,
         }}
@@ -137,7 +174,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
           </button>
         </div>
 
-        {isSuccess ? (
+        {policySuccess ? (
           <div style={{ textAlign: 'center', padding: '32px 0' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>🛡️</div>
             <div style={{ color: '#4ade80', fontSize: 18, marginBottom: 8 }}>Policy Created!</div>
@@ -147,7 +184,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
             <div style={{ marginTop: 16, padding: 16, background: 'rgba(0,0,0,0.2)', borderRadius: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Coverage</span>
-                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{payout} USDC</span>
+                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{coverage} USDC</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Premium Paid</span>
@@ -177,6 +214,38 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
           </div>
         ) : (
           <>
+            {/* Current Regime Indicator */}
+            {currentRegime !== undefined && (
+              <div style={{
+                marginBottom: 16,
+                padding: '8px 12px',
+                background: currentRegime === 0
+                  ? 'rgba(34, 197, 94, 0.1)'
+                  : currentRegime === 1
+                    ? 'rgba(251, 191, 36, 0.1)'
+                    : 'rgba(239, 68, 68, 0.1)',
+                border: `1px solid ${currentRegime === 0
+                  ? 'rgba(34, 197, 94, 0.3)'
+                  : currentRegime === 1
+                    ? 'rgba(251, 191, 36, 0.3)'
+                    : 'rgba(239, 68, 68, 0.3)'}`,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <span style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: currentRegime === 0 ? '#22c55e' : currentRegime === 1 ? '#fbbf24' : '#ef4444',
+                }} />
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  Market Regime: <strong style={{ color: 'var(--text-primary)' }}>{REGIME_LABELS[currentRegime] || 'Unknown'}</strong>
+                </span>
+              </div>
+            )}
+
             {/* Coverage Amount */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -184,8 +253,8 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </label>
               <input
                 type="number"
-                value={payout}
-                onChange={(e) => setPayout(e.target.value)}
+                value={coverage}
+                onChange={(e) => setCoverage(e.target.value)}
                 placeholder="1000"
                 style={{
                   width: '100%',
@@ -208,14 +277,13 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
                 Duration
               </label>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                 {DURATION_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setDuration(opt)}
                     style={{
-                      flex: 1,
-                      padding: '12px',
+                      padding: '12px 8px',
                       background: duration.value === opt.value
                         ? 'rgba(0, 212, 255, 0.2)'
                         : 'rgba(0, 0, 0, 0.2)',
@@ -224,7 +292,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                         : '1px solid rgba(255, 255, 255, 0.1)',
                       borderRadius: 8,
                       color: duration.value === opt.value ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                      fontSize: 14,
+                      fontSize: 13,
                       cursor: 'pointer',
                     }}
                   >
@@ -234,7 +302,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </div>
             </div>
 
-            {/* Premium Display - Calculated from Hazard Curve */}
+            {/* Premium Display */}
             <div style={{
               marginBottom: 20,
               padding: 16,
@@ -253,7 +321,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 <div>
                   {premiumLoading ? (
                     <span style={{ color: 'var(--text-secondary)' }}>Calculating...</span>
-                  ) : payout ? (
+                  ) : coverage ? (
                     <span style={{ fontSize: 24, fontWeight: 700, color: usingFallback ? '#fbbf24' : 'var(--accent-cyan)' }}>
                       {premiumFormatted} USDC
                     </span>
@@ -261,22 +329,22 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                     <span style={{ color: 'var(--text-secondary)' }}>Enter coverage amount</span>
                   )}
                 </div>
-                {premiumBps > 0 && payout && (
+                {coverage && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {(premiumBps / 100).toFixed(2)}% of coverage
+                    {premiumPercent}% of coverage
                   </div>
                 )}
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: usingFallback ? '#fbbf24' : 'var(--text-muted)' }}>
                 {usingFallback
-                  ? 'Using default rate - hazard curve not yet initialized on-chain'
-                  : 'Premium calculated from hazard curve based on risk parameters'
+                  ? 'Using default rate - hazard curves initializing'
+                  : 'Premium calculated from regime-based hazard curve'
                 }
               </div>
             </div>
 
             {/* Summary */}
-            {payout && effectivePremium > 0n && (
+            {coverage && effectivePremium > 0n && (
               <div style={{
                 marginBottom: 20,
                 padding: 16,
@@ -290,7 +358,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'var(--text-muted)' }}>You receive if depeg</span>
-                  <span style={{ color: 'var(--accent-cyan)' }}>{payout} USDC</span>
+                  <span style={{ color: 'var(--accent-cyan)' }}>{coverage} USDC</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Protection period</span>
@@ -299,26 +367,50 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </div>
             )}
 
-            <button
-              onClick={handleCreate}
-              disabled={!effectivePremium || !payout || isPending || waiting}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: isPending || waiting
-                  ? 'rgba(0, 212, 255, 0.3)'
-                  : 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
-                border: 'none',
-                borderRadius: 12,
-                color: '#fff',
-                fontSize: 16,
-                fontWeight: 600,
-                cursor: isPending || waiting ? 'wait' : 'pointer',
-                opacity: (!effectivePremium || !payout) ? 0.5 : 1,
-              }}
-            >
-              {isPending || waiting ? 'Creating Policy...' : 'Create Policy'}
-            </button>
+            {/* Action Buttons */}
+            {needsApproval && !approveSuccess ? (
+              <button
+                onClick={handleApprove}
+                disabled={!effectivePremium || !coverage || approving || waitingApprove}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: approving || waitingApprove
+                    ? 'rgba(168, 85, 247, 0.3)'
+                    : 'linear-gradient(135deg, rgba(168, 85, 247, 0.8) 0%, rgba(0, 212, 255, 0.8) 100%)',
+                  border: 'none',
+                  borderRadius: 12,
+                  color: '#fff',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  cursor: approving || waitingApprove ? 'wait' : 'pointer',
+                  opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
+                }}
+              >
+                {approving || waitingApprove ? 'Approving USDC...' : 'Approve USDC'}
+              </button>
+            ) : (
+              <button
+                onClick={handleCreate}
+                disabled={!effectivePremium || !coverage || issuingPolicy || waitingPolicy}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: issuingPolicy || waitingPolicy
+                    ? 'rgba(0, 212, 255, 0.3)'
+                    : 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
+                  border: 'none',
+                  borderRadius: 12,
+                  color: '#fff',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  cursor: issuingPolicy || waitingPolicy ? 'wait' : 'pointer',
+                  opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
+                }}
+              >
+                {issuingPolicy || waitingPolicy ? 'Creating Policy...' : 'Create Policy'}
+              </button>
+            )}
           </>
         )}
       </div>
