@@ -101,6 +101,63 @@ export const HAZARD_CURVE_ABI = [
       { name: 'minPremiumBps', type: 'uint256' },
     ],
   },
+  {
+    type: 'function',
+    name: 'getCurve',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'bytes32' }],
+    outputs: [
+      { name: 'baseProbPerDay', type: 'uint256' },
+      { name: 'slopePerDay', type: 'uint256' },
+      { name: 'minPremiumBps', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getRiskMultiplier',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'bytes32' }],
+    outputs: [{ name: 'multiplier', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'oracles',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'bytes32' }],
+    outputs: [
+      { name: 'priceFeed', type: 'address' },
+      { name: 'pegPrice', type: 'uint256' },
+      { name: 'deviationThresholdBps', type: 'uint256' },
+      { name: 'maxRiskMultiplier', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'event',
+    name: 'CurveSet',
+    inputs: [
+      { name: 'id', type: 'bytes32', indexed: true },
+      { name: 'baseProbPerDay', type: 'uint256', indexed: false },
+      { name: 'slopePerDay', type: 'uint256', indexed: false },
+      { name: 'minPremiumBps', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'OracleSet',
+    inputs: [
+      { name: 'id', type: 'bytes32', indexed: true },
+      { name: 'priceFeed', type: 'address', indexed: false },
+      { name: 'pegPrice', type: 'uint256', indexed: false },
+      { name: 'deviationThresholdBps', type: 'uint256', indexed: false },
+    ],
+  },
 ] as const
 
 export const ERC20_ABI = [
