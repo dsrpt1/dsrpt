@@ -16,8 +16,8 @@ export const ADDRESSES = {
     // Chainlink Oracle
     chainlinkUsdcUsd: '0x2489462e64Ea205386b7b8737609B3701047a77d',
 
-    // Keeper/Ops Wallet
-    keeper: '0x680d25d5EdF4ccEC25800e0FA5B1C28D377703C0',
+    // Keeper/Ops Wallet (deployer address used in contract deployment)
+    keeper: '0x981306c1aE8829F07444249Ce2D8800F89113B74',
 
     // Legacy aliases (for backward compatibility)
     curve: '0xf6d1a5107c8723bE3526972c4171968A724c50bF',  // hazardEngine
