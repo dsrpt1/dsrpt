@@ -1,7 +1,7 @@
 {
   "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "chainlink_usdc_usd": "0x2489462e64Ea205386b7b8737609B3701047a77d",
-  "keeper": "0x981306c1aE8829F07444249Ce2D8800F89113B74",
+  "keeper": "0x680d25d5EdF4ccEC25800e0FA5B1C28D377703C0",
   "depeg_threshold_1e8": 98000000,
   "max_stale_seconds": 600,
   "curve": { "baseProbPerDay": 100, "slopePerDay": 1, "minPremiumBps": 50 }
