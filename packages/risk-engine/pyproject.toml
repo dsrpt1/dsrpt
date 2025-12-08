@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dsrpt-risk-engine"
+version = "0.1.0"
+description = "Off-chain risk engine for DSRPT Protocol - EVT modeling, Hawkes process, regime classification"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "DSRPT Protocol", email = "dev@dsrpt.io"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+keywords = ["defi", "insurance", "risk", "evt", "hawkes", "parametric"]
+
+dependencies = [
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "scipy>=1.10.0",
+    "scikit-learn>=1.3.0",
+    "statsmodels>=0.14.0",
+    "web3>=6.0.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.24.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.0.0",
+]
+ml = [
+    "torch>=2.0.0",
+    "hmmlearn>=0.3.0",
+    "arch>=6.0.0",
+]
+plotting = [
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "plotly>=5.15.0",
+]
+
+[project.scripts]
+dsrpt-risk = "dsrpt_risk.cli:main"
+
+[project.urls]
+Homepage = "https://dsrpt.io"
+Documentation = "https://docs.dsrpt.io/risk-engine"
+Repository = "https://github.com/dsrpt/dsrpt"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dsrpt_risk*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
