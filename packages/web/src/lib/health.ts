@@ -109,10 +109,14 @@ const HAZARD_ENGINE_ABI = [
 const TREASURY_MANAGER_ABI = [
   {
     type: "function",
-    name: "totalCapital",
+    name: "getPoolStats",
     stateMutability: "view",
     inputs: [],
-    outputs: [{ type: "uint256" }],
+    outputs: [
+      { name: "totalAssets", type: "uint256" },
+      { name: "totalLiabilities", type: "uint256" },
+      { name: "availableCapital", type: "uint256" },
+    ],
   },
   {
     type: "function",
@@ -336,20 +340,26 @@ export async function runHealthCheck(): Promise<HealthReport> {
     });
   }
 
-  // Treasury total capital
+  // Treasury pool stats
   try {
     await delay(200);
-    const capital = await withRetry(() =>
+    const [totalAssets, totalLiabilities, availableCapital] = await withRetry(() =>
       client.readContract({
         address: A.treasuryManager as Address,
         abi: TREASURY_MANAGER_ABI,
-        functionName: "totalCapital",
+        functionName: "getPoolStats",
       })
     );
     rows.push({
       label: "Treasury TVL",
-      value: `${formatUnits(capital, 6)} USDC`,
+      value: `${formatUnits(totalAssets, 6)} USDC`,
       badge: "ok",
+    });
+    rows.push({
+      label: "Available Capital",
+      value: `${formatUnits(availableCapital, 6)} USDC`,
+      badge: availableCapital > 0n ? "ok" : "warn",
+      hint: totalLiabilities > 0n ? `${formatUnits(totalLiabilities, 6)} liabilities` : undefined,
     });
   } catch (e: unknown) {
     const hint = errorMessage(e);
