@@ -1,0 +1,63 @@
+# DSRPT Risk Engine - Base Mainnet Production Config
+
+chain:
+  rpc_url: "${RPC_URL:-https://mainnet.base.org}"
+  chain_id: 8453
+  hazard_engine_address: "0xf6d1a5107c8723bE3526972c4171968A724c50bF"
+  oracle_aggregator_address: "0x773515FD8BD90620d4E9Db7a7DecEc6BA6eb83a3"
+  treasury_manager_address: "0xA659B64Dcb089f12c6B5dB85Dd1c29068a5b8a37"
+  policy_manager_address: "0x277502A8a8763d2E83A747b030f7b67B1B90Dfa1"
+  keepers_adapter_address: "0x112B36dB8d5e0Ab86174E71737d64A51591A6868"
+
+oracle:
+  chainlink_usdc_usd: "0x2489462e64Ea205386b7b8737609B3701047a77d"
+  coingecko_api_url: "https://api.coingecko.com/api/v3"
+  defillama_api_url: "https://coins.llama.fi"
+  update_interval_seconds: 300  # 5 minutes
+
+evt:
+  threshold_quantile: 0.95
+  min_excesses: 30
+  block_size_days: 7
+  confidence_level: 0.95
+
+hawkes:
+  baseline_intensity: 0.01
+  alpha: 0.5
+  beta: 1.0
+  min_events: 10
+
+regime:
+  n_regimes: 3
+  features:
+    - volatility
+    - max_drawdown
+    - cross_venue_spread
+    - depth_to_1pct
+  lookback_days: 30
+  min_samples_per_regime: 50
+
+hazard:
+  tenors_days: [7, 30, 90]
+  simulation_count: 10000
+  trigger_threshold: 0.97  # 3% depeg threshold
+  trigger_duration_hours: 24
+
+hedging:
+  vol_threshold_low_bps: 200
+  vol_threshold_high_bps: 800
+  liquidity_threshold_bps: 50
+  book_exposure_pct: 0.20
+  rebalance_interval_hours: 24
+
+peril_id: "0x6cdb2b1f320420e8bcd2f00c91695a104bd6066ad93d0ccbd0195a603747ed1f"
+
+# Daemon settings
+daemon:
+  regime_check_interval_seconds: 60      # Check regime every minute
+  oracle_update_interval_seconds: 300    # Update oracle every 5 minutes
+  calibration_interval_hours: 24         # Recalibrate curves daily
+  health_check_interval_seconds: 30      # Health check every 30 seconds
+
+log_level: "INFO"
+log_file: "/var/log/dsrpt/risk-engine.log"

@@ -216,5 +216,23 @@ def status(rpc_url: str, peril_id: str, hazard_engine: str):
         console.print(f"[red]Error: {e}[/red]")
 
 
+@main.command()
+@click.option("--config", "-c", type=click.Path(exists=True), help="Config file path")
+def run(config: str):
+    """Run the risk engine daemon (continuous monitoring)."""
+    import asyncio
+
+    console.print("[bold blue]DSRPT Risk Engine - Daemon Mode[/bold blue]")
+    console.print("Starting continuous monitoring...")
+    console.print("Press Ctrl+C to stop\n")
+
+    from dsrpt_risk.daemon import main as daemon_main
+
+    try:
+        asyncio.run(daemon_main(config))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Daemon stopped by user[/yellow]")
+
+
 if __name__ == "__main__":
     main()

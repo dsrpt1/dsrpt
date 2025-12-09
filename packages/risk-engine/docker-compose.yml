@@ -1,0 +1,73 @@
+# DSRPT Risk Engine Docker Compose Configuration
+version: "3.8"
+
+services:
+  risk-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dsrpt-risk-engine
+    restart: unless-stopped
+
+    environment:
+      # Required: Keeper private key for signing transactions
+      - PRIVATE_KEY=${PRIVATE_KEY}
+
+      # Optional: Override RPC URL
+      - RPC_URL=${RPC_URL:-https://mainnet.base.org}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONUNBUFFERED=1
+
+    volumes:
+      # Persist logs
+      - ./logs:/var/log/dsrpt
+
+      # Mount config (optional, for custom config)
+      - ./config.base.yaml:/app/config.base.yaml:ro
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import dsrpt_risk; print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Prometheus metrics exporter
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dsrpt-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+
+volumes:
+  prometheus-data:
