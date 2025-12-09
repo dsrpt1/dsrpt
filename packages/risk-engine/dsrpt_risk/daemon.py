@@ -30,7 +30,6 @@ from typing import Any
 import httpx
 from eth_account import Account
 from web3 import Web3
-from web3.middleware import construct_sign_and_send_raw_middleware
 
 from dsrpt_risk.config import Config, load_config
 
@@ -169,9 +168,6 @@ class RiskEngineDaemon:
         private_key = os.environ.get("PRIVATE_KEY")
         if private_key:
             self.account = Account.from_key(private_key)
-            self.w3.middleware_onion.add(
-                construct_sign_and_send_raw_middleware(self.account)
-            )
             self.w3.eth.default_account = self.account.address
             logger.info(f"Keeper account: {self.account.address}")
         else:
