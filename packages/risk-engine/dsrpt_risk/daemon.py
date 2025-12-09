@@ -75,23 +75,26 @@ ORACLE_AGGREGATOR_ABI = [
         "type": "function",
         "name": "updateOracleState",
         "stateMutability": "nonpayable",
-        "inputs": [
-            {"name": "perilId", "type": "bytes32"},
-            {"name": "volBps", "type": "uint16"},
-            {"name": "pegDevBps", "type": "int16"},
-            {"name": "disagBps", "type": "uint16"},
-            {"name": "shockFlag", "type": "uint8"},
-        ],
+        "inputs": [{"name": "perilId", "type": "bytes32"}],
         "outputs": [],
     },
     {
         "type": "function",
-        "name": "getLatestPrice",
+        "name": "getLatestSnapshot",
         "stateMutability": "view",
-        "inputs": [],
+        "inputs": [{"name": "perilId", "type": "bytes32"}],
         "outputs": [
-            {"name": "price", "type": "int256"},
-            {"name": "timestamp", "type": "uint256"},
+            {
+                "name": "snapshot",
+                "type": "tuple",
+                "components": [
+                    {"name": "timestamp", "type": "uint32"},
+                    {"name": "medianPrice", "type": "uint256"},
+                    {"name": "minPrice", "type": "uint256"},
+                    {"name": "maxPrice", "type": "uint256"},
+                    {"name": "feedCount", "type": "uint8"},
+                ],
+            }
         ],
     },
     {
@@ -248,13 +251,16 @@ class RiskEngineDaemon:
         """Fetch price data from multiple oracles."""
         data = OracleData()
 
-        # Chainlink (on-chain)
+        # On-chain snapshot (from OracleAggregator)
         try:
-            price, timestamp = self.oracle_aggregator.functions.getLatestPrice().call()
-            data.chainlink_price = price / 1e8  # Chainlink uses 8 decimals
-            logger.debug(f"Chainlink USDC/USD: {data.chainlink_price}")
+            peril_id = bytes.fromhex(self.config.peril_id[2:])
+            snapshot = self.oracle_aggregator.functions.getLatestSnapshot(peril_id).call()
+            # snapshot is (timestamp, medianPrice, minPrice, maxPrice, feedCount)
+            if snapshot[1] > 0:  # medianPrice
+                data.chainlink_price = snapshot[1] / 1e18  # Normalized to 1e18
+                logger.debug(f"On-chain USDC: {data.chainlink_price}")
         except Exception as e:
-            logger.warning(f"Chainlink fetch failed: {e}")
+            logger.debug(f"On-chain snapshot fetch failed (may not be configured yet): {e}")
 
         # CoinGecko (off-chain API)
         try:
@@ -360,7 +366,7 @@ class RiskEngineDaemon:
             logger.error(f"Failed to submit regime change: {e}")
 
     async def _update_oracle_state(self, oracle_data: OracleData) -> None:
-        """Update oracle state on-chain."""
+        """Update oracle state on-chain by triggering the OracleAggregator."""
         # Rate limit updates (every 5 minutes)
         if self._last_oracle_update:
             elapsed = (datetime.now() - self._last_oracle_update).total_seconds()
@@ -374,17 +380,15 @@ class RiskEngineDaemon:
         peril_id = bytes.fromhex(self.config.peril_id[2:])
 
         try:
+            # The contract's updateOracleState(perilId) fetches from on-chain Chainlink feeds
+            # and pushes the computed state to the HazardEngine
             tx = self.oracle_aggregator.functions.updateOracleState(
-                peril_id,
-                oracle_data.vol_bps,
-                oracle_data.peg_dev_bps,
-                oracle_data.disagreement_bps,
-                oracle_data.shock_flag,
+                peril_id
             ).build_transaction(
                 {
                     "from": self.account.address,
                     "nonce": self.w3.eth.get_transaction_count(self.account.address),
-                    "gas": 150000,
+                    "gas": 300000,  # Higher gas for multi-feed aggregation
                     "maxFeePerGas": self.w3.eth.gas_price * 2,
                     "maxPriorityFeePerGas": self.w3.to_wei(0.001, "gwei"),
                 }
