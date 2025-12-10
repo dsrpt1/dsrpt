@@ -63,6 +63,9 @@ contract OracleAggregator is IDsrptOracleAdapter {
     /// @notice Last shock timestamp per peril (for cooldown)
     mapping(bytes32 => uint32) private _lastShockTime;
 
+    /// @notice Staleness threshold per peril (in seconds, default 86400 = 24 hours)
+    mapping(bytes32 => uint256) private _stalenessThreshold;
+
     // ============ MODIFIERS ============
 
     modifier onlyOwner() {
@@ -202,8 +205,10 @@ contract OracleAggregator is IDsrptOracleAdapter {
                 uint256 updatedAt,
                 uint80
             ) {
-                // Check staleness
-                if (block.timestamp - updatedAt > 3600) {
+                // Check staleness (use configured threshold, default to 24 hours if not set)
+                uint256 threshold = _stalenessThreshold[perilId];
+                if (threshold == 0) threshold = 86400; // Default 24 hours
+                if (block.timestamp - updatedAt > threshold) {
                     continue; // Skip stale feeds
                 }
 
@@ -374,6 +379,25 @@ contract OracleAggregator is IDsrptOracleAdapter {
     function setHazardEngine(address engine) external override onlyOwner {
         require(engine != address(0), "Zero address");
         hazardEngine = IDsrptHazardEngine(engine);
+    }
+
+    /**
+     * @notice Set staleness threshold for a peril
+     * @param perilId The peril identifier
+     * @param threshold Staleness threshold in seconds (0 = use default 24 hours)
+     */
+    function setStalenessThreshold(bytes32 perilId, uint256 threshold) external onlyOwner {
+        _stalenessThreshold[perilId] = threshold;
+    }
+
+    /**
+     * @notice Get staleness threshold for a peril
+     * @param perilId The peril identifier
+     * @return threshold Staleness threshold in seconds (returns default if not set)
+     */
+    function getStalenessThreshold(bytes32 perilId) external view returns (uint256 threshold) {
+        threshold = _stalenessThreshold[perilId];
+        if (threshold == 0) threshold = 86400; // Default 24 hours
     }
 
     /**

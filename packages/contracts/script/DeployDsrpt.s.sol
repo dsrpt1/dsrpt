@@ -158,6 +158,10 @@ contract DeployDsrpt is Script {
         );
         console2.log("Configured volatility calculation");
 
+        // Set staleness threshold (24 hours - Chainlink USDC/USD on Base updates infrequently)
+        oracleAggregator.setStalenessThreshold(USDC_DEPEG_PERIL, 86400);
+        console2.log("Set staleness threshold to 24 hours");
+
         // ============================================
         // PHASE 6: Configure Hazard Curves
         // ============================================
