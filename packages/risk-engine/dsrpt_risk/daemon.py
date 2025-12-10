@@ -388,7 +388,7 @@ class RiskEngineDaemon:
                 {
                     "from": self.account.address,
                     "nonce": self.w3.eth.get_transaction_count(self.account.address),
-                    "gas": 300000,  # Higher gas for multi-feed aggregation
+                    "gas": 500000,  # Higher gas for multi-feed aggregation + storage writes
                     "maxFeePerGas": self.w3.eth.gas_price * 2,
                     "maxPriorityFeePerGas": self.w3.to_wei(0.001, "gwei"),
                 }
