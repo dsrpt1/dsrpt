@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       'pino-pretty': './empty-module.js',
       'lokijs': './empty-module.js',
       'encoding': './empty-module.js',
+      // Stub out React Native modules (MetaMask SDK compatibility)
+      '@react-native-async-storage/async-storage': './empty-module.js',
     },
   },
   // Webpack fallback (for local dev with --webpack flag)
@@ -25,6 +27,10 @@ const nextConfig: NextConfig = {
       net: false,
       tls: false,
       encoding: false,
+    };
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@react-native-async-storage/async-storage': require.resolve('./empty-module.js'),
     };
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
     return config;
