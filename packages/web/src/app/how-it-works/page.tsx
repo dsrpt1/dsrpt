@@ -121,6 +121,55 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
+      {/* Why It Matters */}
+      <section className="why-section">
+        <h2>Why It Matters</h2>
+        <p className="why-intro">
+          Stablecoins are the backbone of DeFi, but they carry hidden risks. When USDC depegged in March 2023,
+          billions in value evaporated overnight. DSRPT gives you a way to hedge that tail risk.
+        </p>
+        <div className="benefits-grid">
+          <div className="benefit-card">
+            <div className="benefit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+            </div>
+            <h3>Instant Payouts</h3>
+            <p>No waiting for claims approval. Oracle confirms the depeg, smart contract executes the payout. Done.</p>
+          </div>
+          <div className="benefit-card">
+            <div className="benefit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <h3>Tail Risk Hedge</h3>
+            <p>Protect large USDC positions against black swan events. Sleep well knowing your downside is covered.</p>
+          </div>
+          <div className="benefit-card">
+            <div className="benefit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
+            <h3>Fully On-Chain</h3>
+            <p>No counterparty risk. No centralized intermediaries. Verify everything on Base.</p>
+          </div>
+          <div className="benefit-card">
+            <div className="benefit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+            </div>
+            <h3>Capital Efficient</h3>
+            <p>Pay a small premium, get significant coverage. Typical cost: 0.25% for 30 days of protection.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Process Steps */}
       <section className="steps-section">
         <h2>The Process</h2>
