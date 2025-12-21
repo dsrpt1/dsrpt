@@ -170,6 +170,61 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
+      {/* Use Cases */}
+      <section className="usecases-section">
+        <h2>Who Is This For?</h2>
+        <div className="usecases-grid">
+          <div className="usecase-card">
+            <div className="usecase-header">
+              <span className="usecase-icon">🏦</span>
+              <h3>DeFi Treasuries</h3>
+            </div>
+            <p className="usecase-scenario">
+              &ldquo;Our DAO holds $2M in USDC for operations. A depeg would be catastrophic.&rdquo;
+            </p>
+            <p className="usecase-solution">
+              Protect your treasury reserves against stablecoin failure. Cover operational funds so a depeg doesn&apos;t halt your project.
+            </p>
+          </div>
+          <div className="usecase-card">
+            <div className="usecase-header">
+              <span className="usecase-icon">🐋</span>
+              <h3>Large Holders</h3>
+            </div>
+            <p className="usecase-scenario">
+              &ldquo;I&apos;ve got $500K sitting in USDC earning yield. What if Circle has issues?&rdquo;
+            </p>
+            <p className="usecase-solution">
+              Hedge your stablecoin exposure while maintaining liquidity. Keep earning yield, sleep better at night.
+            </p>
+          </div>
+          <div className="usecase-card">
+            <div className="usecase-header">
+              <span className="usecase-icon">🔄</span>
+              <h3>Liquidity Providers</h3>
+            </div>
+            <p className="usecase-scenario">
+              &ldquo;I provide liquidity to USDC pools. A depeg means impermanent loss on steroids.&rdquo;
+            </p>
+            <p className="usecase-solution">
+              Offset potential LP losses during depeg events. The payout helps compensate for impermanent loss.
+            </p>
+          </div>
+          <div className="usecase-card">
+            <div className="usecase-header">
+              <span className="usecase-icon">📊</span>
+              <h3>Trading Desks</h3>
+            </div>
+            <p className="usecase-scenario">
+              &ldquo;We hold USDC as collateral for leveraged positions. A depeg could liquidate us.&rdquo;
+            </p>
+            <p className="usecase-solution">
+              Protect collateral value during market stress. Avoid cascading liquidations from stablecoin instability.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Process Steps */}
       <section className="steps-section">
         <h2>The Process</h2>
@@ -246,6 +301,69 @@ export default function HowItWorksPage() {
           <div className="arch-card">
             <h3>TreasuryManager</h3>
             <p>Holds protocol reserves. Ensures full collateralization of active policies and processes payouts.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="faq-section">
+        <h2>Frequently Asked Questions</h2>
+        <div className="faq-grid">
+          <div className="faq-item">
+            <h3>What triggers a payout?</h3>
+            <p>
+              When the Chainlink USDC/USD oracle reports a price below the strike price ($0.98), your policy is eligible for payout.
+              The payout is calculated as: (strike price - current price) × coverage amount.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>How quickly do payouts happen?</h3>
+            <p>
+              Payouts are triggered automatically by the keeper network within minutes of a depeg event being confirmed on-chain.
+              No claim forms, no waiting period, no human approval needed.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>What if USDC re-pegs quickly?</h3>
+            <p>
+              Payouts are based on oracle snapshots. Once the trigger condition is met and recorded, the payout is locked in.
+              Subsequent price recovery doesn&apos;t affect policies that already triggered.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>How are premiums calculated?</h3>
+            <p>
+              Premiums use actuarial hazard curves that factor in coverage amount, duration, and current market conditions.
+              There&apos;s a minimum floor of 0.25% to ensure treasury sustainability.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>Is the treasury fully collateralized?</h3>
+            <p>
+              Yes. The TreasuryManager holds sufficient USDC reserves to cover all active policy liabilities.
+              Collateralization is verifiable on-chain at any time.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>Can I cancel my policy early?</h3>
+            <p>
+              Policies are non-refundable once purchased. This ensures the protocol can maintain adequate reserves
+              and prevents adverse selection during volatile periods.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>Why Base and not Ethereum mainnet?</h3>
+            <p>
+              Base offers lower transaction costs while maintaining Ethereum security through L2 architecture.
+              This makes smaller coverage amounts economically viable.
+            </p>
+          </div>
+          <div className="faq-item">
+            <h3>What oracles do you use?</h3>
+            <p>
+              We use Chainlink&apos;s decentralized oracle network for USDC/USD price feeds. Chainlink is the industry standard
+              with proven reliability and manipulation resistance.
+            </p>
           </div>
         </div>
       </section>

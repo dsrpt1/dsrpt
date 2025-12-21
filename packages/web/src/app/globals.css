@@ -800,6 +800,108 @@ a:hover {
   line-height: 1.6;
 }
 
+/* Use Cases Section */
+.usecases-section {
+  margin-bottom: 64px;
+}
+
+.usecases-section h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.usecases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.usecase-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 28px;
+  transition: all 0.3s ease;
+}
+
+.usecase-card:hover {
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.usecase-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.usecase-icon {
+  font-size: 28px;
+}
+
+.usecase-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.usecase-scenario {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-bottom: 12px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(168, 85, 247, 0.4);
+}
+
+.usecase-solution {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* FAQ Section */
+.faq-section {
+  margin-bottom: 64px;
+}
+
+.faq-section h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.faq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.faq-item {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.faq-item h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #00d4ff;
+  margin-bottom: 12px;
+}
+
+.faq-item p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
 /* ==================== TEAM PAGE ==================== */
 
 .team-grid {
