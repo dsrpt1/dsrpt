@@ -106,9 +106,20 @@ export default function HowItWorksPage() {
         </Link>
         <div className="page-title-section">
           <h1>How It Works</h1>
-          <p>Parametric protection powered by Chainlink oracles and actuarial risk models</p>
+          <p className="mission-statement">Decentralized parametric risk markets for financial primitives on Base</p>
         </div>
       </header>
+
+      {/* Hero Definition */}
+      <section className="hero-definition">
+        <div className="definition-card">
+          <h2>What is Parametric Protection?</h2>
+          <p>
+            Unlike traditional insurance that requires claims and adjusters, <strong>parametric contracts pay out automatically</strong> when
+            predefined conditions are met. If USDC drops below $0.98, you get paid. No paperwork. No disputes. Just math.
+          </p>
+        </div>
+      </section>
 
       {/* Process Steps */}
       <section className="steps-section">
