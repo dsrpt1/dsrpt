@@ -2,28 +2,11 @@
 
 import Link from 'next/link';
 
-// Placeholder team members - replace with actual data
 const teamMembers = [
   {
-    name: 'Team Member 1',
-    role: 'Co-Founder & CEO',
-    bio: 'Add bio here...',
-    image: null,
-    twitter: '',
-    linkedin: '',
-  },
-  {
-    name: 'Team Member 2',
-    role: 'Co-Founder & CTO',
-    bio: 'Add bio here...',
-    image: null,
-    twitter: '',
-    linkedin: '',
-  },
-  {
-    name: 'Team Member 3',
-    role: 'Head of Risk',
-    bio: 'Add bio here...',
+    name: 'Daniel Cook',
+    role: 'Founder',
+    bio: 'Three decades of experience in commodity markets spanning energy, metals, and agricultural derivatives. Deep expertise in designing hedging programs, managing portfolio risk, and building quantitative pricing models. Now applying institutional-grade risk frameworks to protect DeFi protocols from systemic threats.',
     image: null,
     twitter: '',
     linkedin: '',
