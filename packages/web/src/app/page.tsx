@@ -7,6 +7,7 @@ import { useAccount } from 'wagmi';
 import NetworkStatus from '@/components/NetworkStatus';
 import FundPoolModal from '@/components/FundPoolModal';
 import CreatePolicyModal from '@/components/CreatePolicyModal';
+import Navigation from '@/components/Navigation';
 
 export default function Page() {
   const { isConnected } = useAccount();
@@ -51,6 +52,8 @@ export default function Page() {
             <span className="logo-tagline">Parametric Risk Market</span>
           </div>
         </div>
+
+        <Navigation />
 
         <div className="status-bar">
           <div className="status-item">
