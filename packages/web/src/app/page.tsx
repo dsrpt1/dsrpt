@@ -3,17 +3,84 @@
 
 import { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
+import { formatUnits } from 'viem';
 import NetworkStatus from '@/components/NetworkStatus';
 import FundPoolModal from '@/components/FundPoolModal';
 import CreatePolicyModal from '@/components/CreatePolicyModal';
 import Navigation from '@/components/Navigation';
+import { ADDRESSES, PERIL_IDS } from '@/lib/addresses';
+import { TREASURY_MANAGER_ABI, HAZARD_ENGINE_ABI, ORACLE_AGGREGATOR_ABI } from '@/lib/abis';
+
+const REGIME_LABELS = ['CALM', 'VOLATILE', 'CRISIS'] as const;
+const REGIME_CLASSES = ['positive', 'amber', 'negative'] as const;
+const REGIME_DESCRIPTIONS = ['Low volatility', 'Elevated risk', 'Active depeg'] as const;
 
 export default function Page() {
   const { isConnected } = useAccount();
   const [fundPoolOpen, setFundPoolOpen] = useState(false);
   const [createPolicyOpen, setCreatePolicyOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
+
+  // Read pool liquidity from TreasuryManager
+  const { data: totalCapital } = useReadContract({
+    address: ADDRESSES.base.treasuryManager as `0x${string}`,
+    abi: TREASURY_MANAGER_ABI,
+    functionName: 'totalCapital',
+    query: { refetchInterval: 30_000 },
+  });
+
+  // Read available capacity from TreasuryManager
+  const { data: availableCapacity } = useReadContract({
+    address: ADDRESSES.base.treasuryManager as `0x${string}`,
+    abi: TREASURY_MANAGER_ABI,
+    functionName: 'availableCapacity',
+    query: { refetchInterval: 30_000 },
+  });
+
+  // Read current risk regime from HazardEngine
+  const { data: currentRegime } = useReadContract({
+    address: ADDRESSES.base.hazardEngine as `0x${string}`,
+    abi: HAZARD_ENGINE_ABI,
+    functionName: 'getCurrentRegime',
+    args: [PERIL_IDS.USDC_DEPEG as `0x${string}`],
+    query: { refetchInterval: 30_000 },
+  });
+
+  // Read latest USDC price from OracleAggregator
+  const { data: priceData } = useReadContract({
+    address: ADDRESSES.base.oracleAggregator as `0x${string}`,
+    abi: ORACLE_AGGREGATOR_ABI,
+    functionName: 'getLatestPrice',
+    args: [PERIL_IDS.USDC_DEPEG as `0x${string}`],
+    query: { refetchInterval: 30_000 },
+  });
+
+  // Format values
+  const poolLiquidity = totalCapital
+    ? `$${Number(formatUnits(totalCapital as bigint, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : '$—';
+  const poolCapacity = availableCapacity
+    ? `$${Number(formatUnits(availableCapacity as bigint, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available`
+    : 'Loading...';
+
+  const regimeIndex = typeof currentRegime === 'number' ? currentRegime : 0;
+  const regimeLabel = REGIME_LABELS[regimeIndex] ?? 'CALM';
+  const regimeClass = REGIME_CLASSES[regimeIndex] ?? 'positive';
+  const regimeDesc = REGIME_DESCRIPTIONS[regimeIndex] ?? 'Low volatility';
+
+  // Price comes as 8-decimal Chainlink format
+  const usdcPrice = priceData
+    ? `$${Number(formatUnits((priceData as [bigint, bigint])[0], 8)).toFixed(4)}`
+    : '$—';
+  const priceStable = priceData
+    ? Number(formatUnits((priceData as [bigint, bigint])[0], 8)) >= 0.98
+    : true;
+
+  // Active coverage = totalCapital - availableCapacity
+  const activeCoverage = totalCapital && availableCapacity
+    ? `$${Number(formatUnits((totalCapital as bigint) - (availableCapacity as bigint), 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : '$—';
 
   useEffect(() => {
     const updateTime = () => {
@@ -97,8 +164,8 @@ export default function Page() {
               </div>
               <div className="market-data">
                 <span className="market-label">Active Coverage</span>
-                <span className="market-value">$0</span>
-                <span className="market-change neutral">No policies yet</span>
+                <span className="market-value">{activeCoverage}</span>
+                <span className="market-change neutral">Committed capital</span>
               </div>
             </div>
             <div className="market-card">
@@ -111,8 +178,8 @@ export default function Page() {
               </div>
               <div className="market-data">
                 <span className="market-label">Pool Liquidity</span>
-                <span className="market-value">$0</span>
-                <span className="market-change neutral">Awaiting deposits</span>
+                <span className="market-value">{poolLiquidity}</span>
+                <span className="market-change neutral">{poolCapacity}</span>
               </div>
             </div>
             <div className="market-card">
@@ -123,20 +190,22 @@ export default function Page() {
               </div>
               <div className="market-data">
                 <span className="market-label">USDC Price</span>
-                <span className="market-value">$1.00</span>
-                <span className="market-change positive">Stable</span>
+                <span className="market-value">{usdcPrice}</span>
+                <span className={`market-change ${priceStable ? 'positive' : 'negative'}`}>
+                  {priceStable ? 'Stable' : 'Depeg detected'}
+                </span>
               </div>
             </div>
             <div className="market-card">
-              <div className="market-icon amber">
+              <div className={`market-icon ${regimeIndex === 0 ? 'green' : regimeIndex === 1 ? 'amber' : 'red'}`}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
               </div>
               <div className="market-data">
                 <span className="market-label">Risk Regime</span>
-                <span className="market-value">CALM</span>
-                <span className="market-change positive">Low volatility</span>
+                <span className="market-value">{regimeLabel}</span>
+                <span className={`market-change ${regimeClass}`}>{regimeDesc}</span>
               </div>
             </div>
           </div>

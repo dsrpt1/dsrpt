@@ -7,7 +7,7 @@ export const ADDRESSES = {
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 
     // DSRPT Protocol Contracts
-    oracleAggregator: '0x773515FD8BD90620d4E9Db7a7DecEc6BA6eb83a3',
+    oracleAggregator: '0xbaA261807195AD932382EE2AA9b6436C857E848f',
     treasuryManager: '0xA659B64Dcb089f12c6B5dB85Dd1c29068a5b8a37',
     hazardEngine: '0xf6d1a5107c8723bE3526972c4171968A724c50bF',
     policyManager: '0x277502A8a8763d2E83A747b030f7b67B1B90Dfa1',
@@ -23,7 +23,7 @@ export const ADDRESSES = {
     curve: '0xf6d1a5107c8723bE3526972c4171968A724c50bF',  // hazardEngine
     pool: '0xA659B64Dcb089f12c6B5dB85Dd1c29068a5b8a37',   // treasuryManager
     pm: '0x277502A8a8763d2E83A747b030f7b67B1B90Dfa1',     // policyManager
-    adapter: '0x773515FD8BD90620d4E9Db7a7DecEc6BA6eb83a3', // oracleAggregator
+    adapter: '0xbaA261807195AD932382EE2AA9b6436C857E848f', // oracleAggregator
   },
 } as const
 
