@@ -22,19 +22,11 @@ export default function Page() {
   const [createPolicyOpen, setCreatePolicyOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
 
-  // Read pool liquidity from TreasuryManager
-  const { data: totalCapital } = useReadContract({
+  // Read pool stats from TreasuryManager (returns totalAssets, totalLiabilities, availableCapital)
+  const { data: poolStats } = useReadContract({
     address: ADDRESSES.base.treasuryManager as `0x${string}`,
     abi: TREASURY_MANAGER_ABI,
-    functionName: 'totalCapital',
-    query: { refetchInterval: 30_000 },
-  });
-
-  // Read available capacity from TreasuryManager
-  const { data: availableCapacity } = useReadContract({
-    address: ADDRESSES.base.treasuryManager as `0x${string}`,
-    abi: TREASURY_MANAGER_ABI,
-    functionName: 'availableCapacity',
+    functionName: 'getPoolStats',
     query: { refetchInterval: 30_000 },
   });
 
@@ -47,21 +39,25 @@ export default function Page() {
     query: { refetchInterval: 30_000 },
   });
 
-  // Read latest USDC price from OracleAggregator
-  const { data: priceData } = useReadContract({
+  // Read latest snapshot from OracleAggregator
+  const { data: snapshotData } = useReadContract({
     address: ADDRESSES.base.oracleAggregator as `0x${string}`,
     abi: ORACLE_AGGREGATOR_ABI,
-    functionName: 'getLatestPrice',
+    functionName: 'getLatestSnapshot',
     args: [PERIL_IDS.USDC_DEPEG as `0x${string}`],
     query: { refetchInterval: 30_000 },
   });
 
-  // Format values
-  const poolLiquidity = totalCapital
-    ? `$${Number(formatUnits(totalCapital as bigint, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  // Format values from poolStats tuple [totalAssets, totalLiabilities, availableCapital]
+  const totalAssets = poolStats ? (poolStats as [bigint, bigint, bigint])[0] : null;
+  const totalLiabilities = poolStats ? (poolStats as [bigint, bigint, bigint])[1] : null;
+  const availableCapital = poolStats ? (poolStats as [bigint, bigint, bigint])[2] : null;
+
+  const poolLiquidity = totalAssets
+    ? `$${Number(formatUnits(totalAssets, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : '$—';
-  const poolCapacity = availableCapacity
-    ? `$${Number(formatUnits(availableCapacity as bigint, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available`
+  const poolCapacity = availableCapital
+    ? `$${Number(formatUnits(availableCapital, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available`
     : 'Loading...';
 
   const regimeIndex = typeof currentRegime === 'number' ? currentRegime : 0;
@@ -69,17 +65,19 @@ export default function Page() {
   const regimeClass = REGIME_CLASSES[regimeIndex] ?? 'positive';
   const regimeDesc = REGIME_DESCRIPTIONS[regimeIndex] ?? 'Low volatility';
 
-  // Price comes as 8-decimal Chainlink format
-  const usdcPrice = priceData
-    ? `$${Number(formatUnits((priceData as [bigint, bigint])[0], 8)).toFixed(4)}`
+  // Price comes from snapshot.medianPrice (18 decimals normalized)
+  type Snapshot = { timestamp: number; medianPrice: bigint; minPrice: bigint; maxPrice: bigint; feedCount: number };
+  const snapshot = snapshotData as Snapshot | undefined;
+  const usdcPrice = snapshot?.medianPrice
+    ? `$${Number(formatUnits(snapshot.medianPrice, 18)).toFixed(4)}`
     : '$—';
-  const priceStable = priceData
-    ? Number(formatUnits((priceData as [bigint, bigint])[0], 8)) >= 0.98
+  const priceStable = snapshot?.medianPrice
+    ? Number(formatUnits(snapshot.medianPrice, 18)) >= 0.98
     : true;
 
-  // Active coverage = totalCapital - availableCapacity
-  const activeCoverage = totalCapital && availableCapacity
-    ? `$${Number(formatUnits((totalCapital as bigint) - (availableCapacity as bigint), 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  // Active coverage = totalLiabilities (policies being covered)
+  const activeCoverage = totalLiabilities
+    ? `$${Number(formatUnits(totalLiabilities, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : '$—';
 
   useEffect(() => {

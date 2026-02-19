@@ -228,41 +228,46 @@ export const TREASURY_MANAGER_ABI = [
   },
   {
     type: 'function',
-    name: 'getTrancheAssets',
+    name: 'getPoolStats',
     stateMutability: 'view',
-    inputs: [{ name: 'trancheId', type: 'uint8' }],
-    outputs: [{ name: 'assets', type: 'uint256' }],
+    inputs: [],
+    outputs: [
+      { name: 'totalAssets', type: 'uint256' },
+      { name: 'totalLiabilities', type: 'uint256' },
+      { name: 'availableCapital', type: 'uint256' },
+    ],
   },
   {
     type: 'function',
-    name: 'getTrancheShares',
+    name: 'getTrancheConfig',
     stateMutability: 'view',
     inputs: [{ name: 'trancheId', type: 'uint8' }],
-    outputs: [{ name: 'shares', type: 'uint256' }],
+    outputs: [
+      {
+        name: 'config',
+        type: 'tuple',
+        components: [
+          { name: 'trancheId', type: 'uint8' },
+          { name: 'targetYieldBps', type: 'uint16' },
+          { name: 'poolShareBps', type: 'uint16' },
+          { name: 'capacity', type: 'uint256' },
+          { name: 'deployed', type: 'uint256' },
+        ],
+      },
+    ],
   },
   {
     type: 'function',
-    name: 'getDepositorShares',
+    name: 'getDepositorPosition',
     stateMutability: 'view',
     inputs: [
       { name: 'depositor', type: 'address' },
       { name: 'trancheId', type: 'uint8' },
     ],
-    outputs: [{ name: 'shares', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'totalCapital',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'availableCapacity',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint256' }],
+    outputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'value', type: 'uint256' },
+    ],
   },
   {
     type: 'function',
@@ -273,7 +278,7 @@ export const TREASURY_MANAGER_ABI = [
   },
   {
     type: 'event',
-    name: 'Deposited',
+    name: 'CapitalDeposited',
     inputs: [
       { name: 'depositor', type: 'address', indexed: true },
       { name: 'trancheId', type: 'uint8', indexed: true },
@@ -288,7 +293,7 @@ export const TREASURY_MANAGER_ABI = [
       { name: 'depositor', type: 'address', indexed: true },
       { name: 'trancheId', type: 'uint8', indexed: true },
       { name: 'shares', type: 'uint256', indexed: false },
-      { name: 'effectiveAt', type: 'uint64', indexed: false },
+      { name: 'availableAt', type: 'uint32', indexed: false },
     ],
   },
   {
@@ -297,6 +302,7 @@ export const TREASURY_MANAGER_ABI = [
     inputs: [
       { name: 'depositor', type: 'address', indexed: true },
       { name: 'trancheId', type: 'uint8', indexed: true },
+      { name: 'shares', type: 'uint256', indexed: false },
       { name: 'amount', type: 'uint256', indexed: false },
     ],
   },
@@ -306,27 +312,58 @@ export const TREASURY_MANAGER_ABI = [
 export const ORACLE_AGGREGATOR_ABI = [
   {
     type: 'function',
-    name: 'getLatestPrice',
+    name: 'getLatestSnapshot',
     stateMutability: 'view',
     inputs: [{ name: 'perilId', type: 'bytes32' }],
     outputs: [
-      { name: 'price', type: 'uint256' },
-      { name: 'timestamp', type: 'uint256' },
+      {
+        name: 'snapshot',
+        type: 'tuple',
+        components: [
+          { name: 'timestamp', type: 'uint32' },
+          { name: 'medianPrice', type: 'uint128' },
+          { name: 'minPrice', type: 'uint128' },
+          { name: 'maxPrice', type: 'uint128' },
+          { name: 'feedCount', type: 'uint8' },
+        ],
+      },
     ],
   },
   {
     type: 'function',
-    name: 'getVolatility',
+    name: 'computeOracleState',
     stateMutability: 'view',
     inputs: [{ name: 'perilId', type: 'bytes32' }],
-    outputs: [{ name: 'volBps', type: 'uint256' }],
+    outputs: [
+      {
+        name: 'state',
+        type: 'tuple',
+        components: [
+          { name: 'updatedAt', type: 'uint32' },
+          { name: 'pegDevBps', type: 'uint16' },
+          { name: 'volBps', type: 'uint16' },
+          { name: 'disagreementBps', type: 'uint16' },
+          { name: 'shockFlag', type: 'uint8' },
+        ],
+      },
+    ],
   },
   {
     type: 'function',
-    name: 'isShockDetected',
+    name: 'getVolatilityConfig',
     stateMutability: 'view',
     inputs: [{ name: 'perilId', type: 'bytes32' }],
-    outputs: [{ name: '', type: 'bool' }],
+    outputs: [
+      {
+        name: 'config',
+        type: 'tuple',
+        components: [
+          { name: 'lookbackPeriods', type: 'uint8' },
+          { name: 'ewmaAlpha', type: 'uint16' },
+          { name: 'shockThresholdBps', type: 'uint16' },
+        ],
+      },
+    ],
   },
 ] as const
 
