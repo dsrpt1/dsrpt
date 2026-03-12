@@ -62,36 +62,43 @@ export default function FundPoolModal({ isOpen, onClose }: Props) {
     query: { enabled: !!address },
   })
 
-  // Read tranche assets for display
-  const { data: juniorAssets } = useReadContract({
+  // Read tranche configs for display (deployed = assets)
+  const { data: juniorConfig } = useReadContract({
     address: A.treasuryManager as `0x${string}`,
     abi: TREASURY_MANAGER_ABI,
-    functionName: 'getTrancheAssets',
+    functionName: 'getTrancheConfig',
     args: [TRANCHE_IDS.JUNIOR],
   })
 
-  const { data: mezzAssets } = useReadContract({
+  const { data: mezzConfig } = useReadContract({
     address: A.treasuryManager as `0x${string}`,
     abi: TREASURY_MANAGER_ABI,
-    functionName: 'getTrancheAssets',
+    functionName: 'getTrancheConfig',
     args: [TRANCHE_IDS.MEZZANINE],
   })
 
-  const { data: seniorAssets } = useReadContract({
+  const { data: seniorConfig } = useReadContract({
     address: A.treasuryManager as `0x${string}`,
     abi: TREASURY_MANAGER_ABI,
-    functionName: 'getTrancheAssets',
+    functionName: 'getTrancheConfig',
     args: [TRANCHE_IDS.SENIOR],
   })
 
-  // Read user's shares in selected tranche
-  const { data: userShares } = useReadContract({
+  // Read user's position in selected tranche (returns shares, value)
+  const { data: userPosition } = useReadContract({
     address: A.treasuryManager as `0x${string}`,
     abi: TREASURY_MANAGER_ABI,
-    functionName: 'getDepositorShares',
+    functionName: 'getDepositorPosition',
     args: address ? [address, selectedTranche.id] : undefined,
     query: { enabled: !!address },
   })
+
+  // Extract assets from configs
+  type TrancheConfig = { deployed: bigint }
+  const juniorAssets = (juniorConfig as TrancheConfig)?.deployed || 0n
+  const mezzAssets = (mezzConfig as TrancheConfig)?.deployed || 0n
+  const seniorAssets = (seniorConfig as TrancheConfig)?.deployed || 0n
+  const userShares = (userPosition as [bigint, bigint] | undefined)?.[0]
 
   // Approve transaction
   const { writeContract: approve, data: approveTx, isPending: approving } = useWriteContract()
