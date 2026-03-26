@@ -1,0 +1,2 @@
+event,regime,naive_regret,hard_regret,soft_regret,best_policy
+MEAN_REGRET,—,0.0,0.000298,0.000298,naive

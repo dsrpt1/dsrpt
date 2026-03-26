@@ -1,0 +1,4 @@
+event_key,regime,confidence,max_severity,initial_drop_1h,initial_drop_6h,recovery_half_life_h,severity_persistence,depth_loss_rate,volume_spike_ratio,terminal_severity,rules_fired,notes
+UST_2022,ambiguous,low,0.6548,0.0084,0.0084,37.0,0.9704,0.00344,1.6,0.18,no_primary_rule_fired,"Mixed signals. Needs additional data (collateral type, venue dispersion, governance context)."
+USDC_2023,ambiguous,low,0.0795,0.0033,0.0192,7.0,0.2877,0.0055,2.32,0.0004,no_primary_rule_fired,"Mixed signals. Needs additional data (collateral type, venue dispersion, governance context)."
+FRAX_2023,contained_stress,medium,0.0486,0.0039,0.0098,14.0,0.3636,0.00167,1.56,0.0001,R3: mild_severity + persistent + slow_recovery,"Sustained mild stress without structural failure. Contagion spread, contained."

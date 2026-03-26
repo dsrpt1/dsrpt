@@ -1,0 +1,4 @@
+event,regime,naive_model,naive_score,naive_regret,hard_model,hard_score,hard_regret,hard_pool,soft_model,soft_score,soft_regret,soft_lambda,best_policy
+UST_2022,reflexive_collapse,exp_decay_α=2.0,-0.014176,0.0,exp_decay_α=2.0,-0.014176,0.0,6,exp_decay_α=2.0,-0.014176,0.0,0.1,naive
+USDC_2023,collateral_shock,power_law_α=1.5,-0.001806,0.0,power_law_α=1.5,-0.001806,0.0,18,power_law_α=1.5,-0.001806,0.0,0.1,naive
+FRAX_2023,contained_stress,power_law_α=1.5,-0.001453,0.0,duration_α=10.0_γ=0.02,-0.002347,0.000894,15,duration_α=10.0_γ=0.02,-0.002347,0.000894,0.1,naive

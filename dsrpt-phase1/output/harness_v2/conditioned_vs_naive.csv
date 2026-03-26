@@ -1,0 +1,4 @@
+event,regime,naive_best_model,naive_score,cond_best_model,cond_score,score_delta,cond_wins,prior_pool_size,note
+UST_2022,ambiguous,piecewise_b=0.1_α=5.0,-0.009186,piecewise_b=0.02_α=3.0,-0.001751,0.007435,True,11,IN-SAMPLE — out-of-sample test required in Phase 2
+USDC_2023,collateral_shock,power_law_α=1.5,-0.001806,piecewise_b=0.03_α=10.0,-0.07226,-0.070454,False,4,IN-SAMPLE — out-of-sample test required in Phase 2
+FRAX_2023,contained_stress,power_law_α=1.5,-0.00143,duration_α=5.0_γ=0.03,-0.006342,-0.004911,False,4,IN-SAMPLE — out-of-sample test required in Phase 2
