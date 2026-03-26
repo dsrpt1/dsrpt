@@ -1,34 +1,42 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
-import {HazardCurveEngine} from "./HazardCurveEngine.sol";
+import {IDsrptHazardEngine} from "./interfaces/IDsrptHazardEngine.sol";
 
 /**
  * @title OracleAdapter
- * @notice Bridges the off-chain signal engine to on-chain pricing.
+ * @notice Bridges the off-chain signal engine to on-chain pricing via DsrptHazardEngine.
  *
  * The core vulnerability: any latency between signal detection (Python
- * classifier_v2.py) and premium repricing (HazardCurveEngine) lets
+ * classifier_v2.py) and premium repricing (DsrptHazardEngine) lets
  * sophisticated actors buy coverage at stale prices. This contract
- * eliminates that gap by atomically updating regime state AND forwarding
- * curve parameter changes to HazardCurveEngine in a single transaction.
+ * eliminates that gap by atomically updating regime state, oracle state,
+ * and triggering a regime transition on the engine — all in one transaction.
  *
- * Regime taxonomy (from classifier_v2.py):
- *   0 AMBIGUOUS            -- insufficient signal, base pricing (1.00x)
- *   1 CONTAINED_STRESS     -- mild persistent contagion (1.25x)
- *   2 LIQUIDITY_DISLOCATION -- execution risk, not systemic (1.10x)
- *   3 COLLATERAL_SHOCK     -- sharp reserve impairment (1.50x), cap new coverage
- *   4 REFLEXIVE_COLLAPSE   -- terminal spiral, halt all new issuance
+ * Signal engine regime taxonomy (5 levels from classifier_v2.py):
+ *   0 AMBIGUOUS            -- base pricing (1.00x)        -> Engine: Calm
+ *   1 CONTAINED_STRESS     -- mild contagion (1.25x)      -> Engine: Volatile
+ *   2 LIQUIDITY_DISLOCATION -- execution risk (1.10x)     -> Engine: Volatile
+ *   3 COLLATERAL_SHOCK     -- reserve impairment (1.50x)  -> Engine: Crisis
+ *   4 REFLEXIVE_COLLAPSE   -- halt issuance               -> Engine: Crisis
  *
- * Integration:
- *   - OracleAdapter must be owner of HazardCurveEngine so it can call setCurve()
- *   - Signal relayer (keeper/EOA) calls updateRegime() on every regime transition
- *   - PolicyManager checks isPolicyIssuanceAllowed() before writing new policies
- *   - LiquidityPool checks isWithdrawalAllowed() before processing LP withdrawals
+ * DsrptHazardEngine regime transitions:
+ *   - Upgrades (Calm->Volatile, Volatile->Crisis) are IMMEDIATE
+ *   - Downgrades have timelocks (Crisis->Volatile: 7d, Volatile->Calm: 3d)
+ *   - This is the right behavior: risk increases take effect instantly,
+ *     de-escalation is conservative
+ *
+ * Required roles on DsrptHazardEngine:
+ *   - riskOracle: to call proposeRegimeChange() (immediate for upgrades)
+ *   - keeper: to call pushOracleState() with signal-derived market state
+ *
+ * Setup:
+ *   hazardEngine.setRiskOracle(address(oracleAdapter));
+ *   hazardEngine.setKeeper(address(oracleAdapter));
  */
 contract OracleAdapter {
 
-    // -- Regime enum (order matches classifier_v2.py REGIME_LABELS severity) -----
+    // -- Signal engine regime (5-level, from classifier_v2.py) -----
 
     enum Regime {
         AMBIGUOUS,              // 0
@@ -64,6 +72,11 @@ contract OracleAdapter {
         EscalationLevel         previousLevel
     );
 
+    event EngineRegimeSynced(
+        bytes32 indexed perilId,
+        IDsrptHazardEngine.RegimeKind engineRegime
+    );
+
     event CoverageCapSet(address indexed asset, uint256 maxNewCoverage);
     event IssuanceHalted(address indexed asset);
     event IssuanceResumed(address indexed asset);
@@ -82,22 +95,11 @@ contract OracleAdapter {
         bool            issuanceHalted;
     }
 
-    // -- Storage for base curve parameters (before regime adjustment) -----
-
-    struct BaseCurveParams {
-        uint256 baseProbPerDay;
-        uint256 slopePerDay;
-        uint16  minPremiumBps;
-        uint16  maxMultiplierBps; // base max multiplier before regime loading
-        uint16  pegThresholdBps;
-        uint32  oracleStaleAfter;
-    }
-
     // -- State -----
 
     address public owner;
     address public signalRelayer;
-    HazardCurveEngine public hazardEngine;
+    IDsrptHazardEngine public hazardEngine;
 
     uint256 public constant LOCKUP_PERIOD = 72 hours;
 
@@ -106,11 +108,14 @@ contract OracleAdapter {
     uint256 public constant MULT_CONTAINED_STRESS    = 12_500; // 1.25x
     uint256 public constant MULT_LIQUIDITY_DISLOC    = 11_000; // 1.10x
     uint256 public constant MULT_COLLATERAL_SHOCK    = 15_000; // 1.50x
-    // REFLEXIVE_COLLAPSE: issuance halted, no multiplier needed
 
-    mapping(address => AssetState)      public assetStates;
-    mapping(bytes32 => BaseCurveParams) public baseCurves;
-    mapping(address => bytes32)         public assetPerilIds;
+    // Shock flag values for pushOracleState
+    uint8 public constant SHOCK_NORMAL  = 0;
+    uint8 public constant SHOCK_WARNING = 1;
+    uint8 public constant SHOCK_ACTIVE  = 2;
+
+    mapping(address => AssetState) public assetStates;
+    mapping(address => bytes32)    public assetPerilIds;
 
     // -- Modifiers -----
 
@@ -132,50 +137,16 @@ contract OracleAdapter {
 
         owner         = msg.sender;
         signalRelayer = _signalRelayer;
-        hazardEngine  = HazardCurveEngine(_hazardEngine);
+        hazardEngine  = IDsrptHazardEngine(_hazardEngine);
     }
 
     // =========================================================================
-    // Setup: register asset -> perilId mapping and store base curve params
+    // Setup: register asset -> perilId mapping
     // =========================================================================
 
-    /**
-     * @notice Register an asset with its peril ID and store the base curve params.
-     *         The OracleAdapter will adjust maxMultiplierBps on regime transitions.
-     * @dev    OracleAdapter must be owner of HazardCurveEngine.
-     */
-    function registerAsset(
-        address asset,
-        bytes32 perilId,
-        uint256 baseProbPerDay,
-        uint256 slopePerDay,
-        uint16  minPremiumBps,
-        uint16  maxMultiplierBps,
-        uint16  pegThresholdBps,
-        uint32  oracleStaleAfter
-    ) external onlyOwner {
+    function registerAsset(address asset, bytes32 perilId) external onlyOwner {
+        require(perilId != bytes32(0), "OracleAdapter: zero perilId");
         assetPerilIds[asset] = perilId;
-
-        baseCurves[perilId] = BaseCurveParams({
-            baseProbPerDay:   baseProbPerDay,
-            slopePerDay:      slopePerDay,
-            minPremiumBps:    minPremiumBps,
-            maxMultiplierBps: maxMultiplierBps,
-            pegThresholdBps:  pegThresholdBps,
-            oracleStaleAfter: oracleStaleAfter
-        });
-
-        // Set the initial curve on HazardCurveEngine (active, base multiplier)
-        hazardEngine.setCurve(
-            perilId,
-            baseProbPerDay,
-            slopePerDay,
-            minPremiumBps,
-            maxMultiplierBps,
-            pegThresholdBps,
-            oracleStaleAfter,
-            true
-        );
     }
 
     // =========================================================================
@@ -184,10 +155,11 @@ contract OracleAdapter {
     //
     // Critical path. The relayer calls updateRegime() and the contract:
     //   1. Records new regime + confidence
-    //   2. Computes premium multiplier
-    //   3. Adjusts HazardCurveEngine curve via setCurve() in the SAME tx
-    //   4. Updates escalation level and issuance gates
-    //   5. Starts 72h lockup timer if regime changed
+    //   2. Computes premium multiplier and escalation
+    //   3. Maps 5-level signal regime to 3-level engine regime
+    //   4. Calls proposeRegimeChange() on DsrptHazardEngine (immediate for upgrades)
+    //   5. Pushes oracle state with signal-derived shock flag + peg deviation
+    //   6. Applies issuance gates and 72h LP lockup
     //
     // Zero latency: signal -> pricing update in one atomic transaction.
     // No block gap. No mempool exposure of the signal before repricing.
@@ -195,7 +167,9 @@ contract OracleAdapter {
     function updateRegime(
         address asset,
         uint8   regimeId,
-        uint256 confidence   // 0-10000
+        uint256 confidence,  // 0-10000
+        uint16  pegDevBps,   // current peg deviation from signal engine
+        uint16  volBps       // realized volatility from signal engine
     ) external onlyRelayer {
         require(regimeId <= uint8(Regime.REFLEXIVE_COLLAPSE), "OracleAdapter: invalid regime");
         require(confidence <= 10_000, "OracleAdapter: confidence out of range");
@@ -209,11 +183,11 @@ contract OracleAdapter {
         Regime prevRegime = state.regime;
         bool regimeChanged = (newRegime != prevRegime) || (state.lastUpdateBlock == 0);
 
-        // 1. Update regime state
-        state.previousRegime      = prevRegime;
-        state.regime              = newRegime;
-        state.confidence          = confidence;
-        state.lastUpdateBlock     = block.number;
+        // 1. Update local regime state
+        state.previousRegime  = prevRegime;
+        state.regime          = newRegime;
+        state.confidence      = confidence;
+        state.lastUpdateBlock = block.number;
 
         // 2. Compute premium multiplier
         uint256 multiplier = _premiumMultiplier(newRegime);
@@ -231,10 +205,8 @@ contract OracleAdapter {
             state.lastRegimeTransition = block.timestamp;
         }
 
-        // 6. ATOMIC: adjust HazardCurveEngine curve in the same transaction.
-        //    Scale the base maxMultiplierBps by the regime loading factor.
-        //    For REFLEXIVE_COLLAPSE, deactivate the curve entirely.
-        _syncHazardEngine(perilId, newRegime, multiplier);
+        // 6. ATOMIC: sync DsrptHazardEngine — regime + oracle state in same tx
+        _syncEngine(perilId, newRegime, regimeChanged, pegDevBps, volBps);
 
         // 7. Emit events
         emit RegimeUpdated(
@@ -247,57 +219,87 @@ contract OracleAdapter {
     }
 
     // =========================================================================
-    // HazardCurveEngine Sync
+    // DsrptHazardEngine Sync
     // =========================================================================
+    //
+    // Two atomic operations in the same tx:
+    //   1. proposeRegimeChange() — switches the hazard curve (immediate for upgrades)
+    //   2. pushOracleState() — updates market multiplier inputs
+    //
+    // Together these ensure the premium calculation reflects the new regime
+    // before any new policy can be written.
 
-    function _syncHazardEngine(
+    function _syncEngine(
         bytes32 perilId,
         Regime  regime,
-        uint256 regimeMultiplierBps
+        bool    regimeChanged,
+        uint16  pegDevBps,
+        uint16  volBps
     ) internal {
-        BaseCurveParams memory base = baseCurves[perilId];
+        // Map 5-level signal regime to 3-level engine regime
+        IDsrptHazardEngine.RegimeKind engineRegime = _mapToEngineRegime(regime);
 
-        if (regime == Regime.REFLEXIVE_COLLAPSE) {
-            // Deactivate curve -- no new premiums can be quoted
-            hazardEngine.setCurve(
-                perilId,
-                base.baseProbPerDay,
-                base.slopePerDay,
-                base.minPremiumBps,
-                base.maxMultiplierBps,
-                base.pegThresholdBps,
-                base.oracleStaleAfter,
-                false  // <-- inactive
-            );
-            return;
+        // Only propose regime change if the ENGINE regime actually changed
+        if (regimeChanged) {
+            IDsrptHazardEngine.RegimeKind currentEngineRegime = hazardEngine.getCurrentRegime(perilId);
+
+            if (engineRegime != currentEngineRegime) {
+                // proposeRegimeChange(): upgrades are immediate, downgrades timelocked
+                hazardEngine.proposeRegimeChange(perilId, engineRegime);
+
+                emit EngineRegimeSynced(perilId, engineRegime);
+            }
         }
 
-        // Scale maxMultiplierBps by regime loading:
-        //   adjusted = base.maxMultiplierBps * regimeMultiplierBps / 10000
-        // e.g. base 30000 (3x) * 12500 (1.25x regime) / 10000 = 37500 (3.75x)
-        uint256 adjusted = uint256(base.maxMultiplierBps) * regimeMultiplierBps / 10_000;
+        // Push oracle state with signal-derived values.
+        // The shock flag maps from regime severity:
+        //   AMBIGUOUS/CONTAINED_STRESS  -> NORMAL (0)
+        //   LIQUIDITY_DISLOCATION       -> WARNING (1)
+        //   COLLATERAL_SHOCK            -> SHOCK (2)
+        //   REFLEXIVE_COLLAPSE          -> SHOCK (2)
+        uint8 shockFlag = _shockFlag(regime);
 
-        // Cap to uint16 max (65535 = 6.5535x) -- safe for all defined regimes
-        uint16 adjustedMultBps = adjusted > type(uint16).max
-            ? type(uint16).max
-            : uint16(adjusted);
-
-        // Also scale minPremiumBps by regime loading
-        uint256 adjustedMin = uint256(base.minPremiumBps) * regimeMultiplierBps / 10_000;
-        uint16 adjustedMinBps = adjustedMin > type(uint16).max
-            ? type(uint16).max
-            : uint16(adjustedMin);
-
-        hazardEngine.setCurve(
+        hazardEngine.pushOracleState(
             perilId,
-            base.baseProbPerDay,
-            base.slopePerDay,
-            adjustedMinBps,
-            adjustedMultBps,
-            base.pegThresholdBps,
-            base.oracleStaleAfter,
-            true
+            IDsrptHazardEngine.OracleState({
+                updatedAt:       uint32(block.timestamp),
+                pegDevBps:       pegDevBps,
+                volBps:          volBps,
+                disagreementBps: 0, // not available from signal engine
+                shockFlag:       shockFlag
+            })
         );
+    }
+
+    // =========================================================================
+    // Regime Mapping: 5-level signal -> 3-level engine
+    // =========================================================================
+    //
+    // classifier_v2.py (5 regimes)     DsrptHazardEngine (3 regimes)
+    // ─────────────────────────────    ─────────────────────────────
+    // AMBIGUOUS                    ->  Calm
+    // CONTAINED_STRESS             ->  Volatile
+    // LIQUIDITY_DISLOCATION        ->  Volatile
+    // COLLATERAL_SHOCK             ->  Crisis
+    // REFLEXIVE_COLLAPSE           ->  Crisis
+
+    function _mapToEngineRegime(Regime regime)
+        internal pure returns (IDsrptHazardEngine.RegimeKind)
+    {
+        if (regime == Regime.AMBIGUOUS) {
+            return IDsrptHazardEngine.RegimeKind.Calm;
+        }
+        if (regime == Regime.CONTAINED_STRESS || regime == Regime.LIQUIDITY_DISLOCATION) {
+            return IDsrptHazardEngine.RegimeKind.Volatile;
+        }
+        // COLLATERAL_SHOCK and REFLEXIVE_COLLAPSE
+        return IDsrptHazardEngine.RegimeKind.Crisis;
+    }
+
+    function _shockFlag(Regime regime) internal pure returns (uint8) {
+        if (regime <= Regime.CONTAINED_STRESS) return SHOCK_NORMAL;
+        if (regime == Regime.LIQUIDITY_DISLOCATION) return SHOCK_WARNING;
+        return SHOCK_ACTIVE; // COLLATERAL_SHOCK, REFLEXIVE_COLLAPSE
     }
 
     // =========================================================================
@@ -309,7 +311,7 @@ contract OracleAdapter {
         if (regime == Regime.CONTAINED_STRESS)      return MULT_CONTAINED_STRESS;
         if (regime == Regime.LIQUIDITY_DISLOCATION) return MULT_LIQUIDITY_DISLOC;
         if (regime == Regime.COLLATERAL_SHOCK)      return MULT_COLLATERAL_SHOCK;
-        // REFLEXIVE_COLLAPSE -- issuance halted; return max as a poison value
+        // REFLEXIVE_COLLAPSE — issuance halted; return max as poison value
         return type(uint256).max;
     }
 
@@ -329,12 +331,11 @@ contract OracleAdapter {
             }
             state.maxNewCoverage = 0;
         } else if (regime == Regime.COLLATERAL_SHOCK) {
-            // Lift halt if recovering from collapse, but keep coverage cap
             if (state.issuanceHalted) {
                 state.issuanceHalted = false;
                 emit IssuanceResumed(asset);
             }
-            // Coverage cap is set externally via setCoverageCap()
+            // Coverage cap set externally via setCoverageCap()
         } else {
             if (state.issuanceHalted) {
                 state.issuanceHalted = false;
@@ -383,15 +384,13 @@ contract OracleAdapter {
     }
 
     /**
-     * @notice PolicyManager calls this before writing a new policy.
+     * @notice PolicyManager / DsrptPolicyManager calls this before writing a new policy.
      *         Returns false during ESCALATING, CRITICAL, or explicit halt.
      */
     function isPolicyIssuanceAllowed(address asset) external view returns (bool) {
         AssetState storage state = assetStates[asset];
-
         if (state.escalation >= EscalationLevel.ESCALATING) return false;
         if (state.issuanceHalted) return false;
-
         return true;
     }
 
@@ -406,10 +405,6 @@ contract OracleAdapter {
     // =========================================================================
     // LP Withdrawal Lockup (72h)
     // =========================================================================
-    //
-    // After ANY regime transition, LP withdrawals are locked for 72 hours.
-    // Prevents LPs from front-running a deepening crisis by pulling capital
-    // after the signal fires but before claims materialize.
 
     function isWithdrawalAllowed(address asset) external view returns (bool) {
         uint256 lastTransition = assetStates[asset].lastRegimeTransition;
@@ -423,7 +418,6 @@ contract OracleAdapter {
 
         uint256 unlockTime = lastTransition + LOCKUP_PERIOD;
         if (block.timestamp >= unlockTime) return 0;
-
         return unlockTime - block.timestamp;
     }
 
@@ -451,7 +445,7 @@ contract OracleAdapter {
 
     function setHazardEngine(address _engine) external onlyOwner {
         require(_engine != address(0), "OracleAdapter: zero engine");
-        hazardEngine = HazardCurveEngine(_engine);
+        hazardEngine = IDsrptHazardEngine(_engine);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
