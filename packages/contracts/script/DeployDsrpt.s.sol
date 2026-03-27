@@ -12,6 +12,8 @@ import {KeepersAdapter} from "../src/oracles/KeepersAdapter.sol";
 import {IDsrptHazardEngine} from "../src/interfaces/IDsrptHazardEngine.sol";
 import {IDsrptOracleAdapter} from "../src/interfaces/IDsrptOracleAdapter.sol";
 
+import {OracleAdapter} from "../src/OracleAdapter.sol";
+
 /**
  * @title DeployDsrpt
  * @notice Complete deployment script for the DSRPT Protocol on Base
@@ -21,12 +23,17 @@ import {IDsrptOracleAdapter} from "../src/interfaces/IDsrptOracleAdapter.sol";
  *      - DsrptHazardEngine: Regime-based pricing engine
  *      - DsrptPolicyManager: Policy lifecycle management
  *      - KeepersAdapter: Chainlink Automation integration
+ *      - OracleAdapter: Signal engine -> pricing bridge
  *
  * Usage:
  *   forge script script/DeployDsrpt.s.sol:DeployDsrpt \
  *     --rpc-url https://mainnet.base.org \
  *     --broadcast \
  *     --verify
+ *
+ * Env vars:
+ *   PRIVATE_KEY       — Deployer private key
+ *   SIGNAL_RELAYER    — EOA address for the signal engine relay (optional, defaults to keeper)
  */
 contract DeployDsrpt is Script {
     // Base Mainnet addresses
@@ -196,6 +203,35 @@ contract DeployDsrpt is Script {
         );
         console2.log("Registered USDC_depeg peril with KeepersAdapter");
 
+        // ============================================
+        // PHASE 8: Deploy OracleAdapter (Signal Bridge)
+        // ============================================
+        console2.log("");
+        console2.log("--- Phase 8: OracleAdapter ---");
+
+        // Use SIGNAL_RELAYER env var if set, otherwise default to keeper
+        address signalRelayer = keeper;
+        try vm.envAddress("SIGNAL_RELAYER") returns (address relayer) {
+            signalRelayer = relayer;
+        } catch {}
+        console2.log("Signal relayer:", signalRelayer);
+
+        // 6) Deploy OracleAdapter
+        OracleAdapter oracleAdapter = new OracleAdapter(signalRelayer, address(hazardEngine));
+        console2.log("OracleAdapter:", address(oracleAdapter));
+
+        // Grant riskOracle role -> adapter calls proposeRegimeChange()
+        hazardEngine.setRiskOracle(address(oracleAdapter));
+        console2.log("  -> setRiskOracle: done");
+
+        // Grant keeper role -> adapter calls pushOracleState()
+        hazardEngine.setKeeper(address(oracleAdapter));
+        console2.log("  -> setKeeper: done");
+
+        // Register USDC asset with peril ID
+        oracleAdapter.registerAsset(usdc, USDC_DEPEG_PERIL);
+        console2.log("  -> registerAsset(USDC): done");
+
         vm.stopBroadcast();
 
         // ============================================
@@ -212,12 +248,17 @@ contract DeployDsrpt is Script {
         console2.log("  HazardEngine:    ", address(hazardEngine));
         console2.log("  PolicyManager:   ", address(policyManager));
         console2.log("  KeepersAdapter:  ", address(keepersAdapter));
+        console2.log("  OracleAdapter:   ", address(oracleAdapter));
+        console2.log("");
+        console2.log("Signal Relayer:    ", signalRelayer);
         console2.log("");
         console2.log("Next Steps:");
-        console2.log("  1. Register KeepersAdapter with Chainlink Automation");
-        console2.log("     https://automation.chain.link/");
-        console2.log("  2. Fund tranches: treasury.deposit(trancheId, amount)");
-        console2.log("  3. Issue policies via PolicyManager");
+        console2.log("  1. Fund signal relayer with ETH on Base");
+        console2.log("  2. Set Railway env vars:");
+        console2.log("     DSRPT_RPC_URL, DSRPT_RELAYER_KEY, DSRPT_ADAPTER_ADDRESS");
+        console2.log("  3. Deploy signal engine to Railway");
+        console2.log("  4. Register KeepersAdapter with Chainlink Automation");
+        console2.log("  5. Fund tranches: treasury.deposit(trancheId, amount)");
         console2.log("");
         console2.log("Peril ID: ", vm.toString(USDC_DEPEG_PERIL));
     }
