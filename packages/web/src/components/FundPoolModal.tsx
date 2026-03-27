@@ -1,3 +1,4 @@
+// FundPoolModal - LP deposit interface for DSRPT tranches
 'use client'
 import { useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
