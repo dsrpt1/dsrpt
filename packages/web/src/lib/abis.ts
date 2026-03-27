@@ -426,3 +426,76 @@ export const ERC20_ABI = [
 // For backward compatibility with existing code
 export const HAZARD_CURVE_ABI = HAZARD_ENGINE_ABI
 export const LIQUIDITY_POOL_ABI = TREASURY_MANAGER_ABI
+
+// ============ OracleAdapter ABI ============
+export const ORACLE_ADAPTER_ABI = [
+  {
+    type: 'function',
+    name: 'getCurrentRegime',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [
+      { name: 'regime', type: 'uint8' },
+      { name: 'confidence', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getEscalationLevel',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'getPremiumMultiplier',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'isPolicyIssuanceAllowed',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'isWithdrawalAllowed',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'timeUntilWithdrawalUnlock',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getCoverageCap',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'assetStates',
+    stateMutability: 'view',
+    inputs: [{ name: 'asset', type: 'address' }],
+    outputs: [
+      { name: 'regime', type: 'uint8' },
+      { name: 'previousRegime', type: 'uint8' },
+      { name: 'escalation', type: 'uint8' },
+      { name: 'confidence', type: 'uint256' },
+      { name: 'premiumMultiplierBps', type: 'uint256' },
+      { name: 'lastRegimeTransition', type: 'uint256' },
+      { name: 'lastUpdateBlock', type: 'uint256' },
+      { name: 'maxNewCoverage', type: 'uint256' },
+      { name: 'issuanceHalted', type: 'bool' },
+    ],
+  },
+] as const

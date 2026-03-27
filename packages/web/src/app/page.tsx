@@ -9,6 +9,7 @@ import NetworkStatus from '@/components/NetworkStatus';
 import FundPoolModal from '@/components/FundPoolModal';
 import CreatePolicyModal from '@/components/CreatePolicyModal';
 import Navigation from '@/components/Navigation';
+import SignalPanel from '@/components/SignalPanel';
 import { ADDRESSES, PERIL_IDS } from '@/lib/addresses';
 import { TREASURY_MANAGER_ABI, HAZARD_ENGINE_ABI, ORACLE_AGGREGATOR_ABI } from '@/lib/abis';
 
@@ -209,6 +210,9 @@ export default function Page() {
           </div>
         </section>
 
+        {/* Signal Engine Panel */}
+        <SignalPanel />
+
         {/* Center Panel - Network Status */}
         <section className="panel center-panel">
           <NetworkStatus />
@@ -305,7 +309,7 @@ export default function Page() {
         <div className="stat-divider"></div>
         <div className="stat-item">
           <span className="stat-label">Contracts</span>
-          <span className="stat-value">5 Deployed</span>
+          <span className="stat-value">6 Deployed</span>
         </div>
         <div className="stat-divider"></div>
         <div className="stat-item">

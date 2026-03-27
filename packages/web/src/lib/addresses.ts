@@ -1,29 +1,30 @@
 // DSRPT Protocol Contract Addresses - Base Mainnet
-// Deployed: 2024
+// Deployed: 2026-03-27 (Block 43922285)
 
 export const ADDRESSES = {
   base: {
     // Core Assets
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 
-    // DSRPT Protocol Contracts
-    oracleAggregator: '0xbaA261807195AD932382EE2AA9b6436C857E848f',
-    treasuryManager: '0xA659B64Dcb089f12c6B5dB85Dd1c29068a5b8a37',
-    hazardEngine: '0xf6d1a5107c8723bE3526972c4171968A724c50bF',
-    policyManager: '0x277502A8a8763d2E83A747b030f7b67B1B90Dfa1',
-    keepersAdapter: '0x112B36dB8d5e0Ab86174E71737d64A51591A6868',
+    // DSRPT Protocol Contracts (production deployment)
+    oracleAggregator: '0xB203E42D84B70a60E3032F5Ed661C50cc7E9e3Cb',
+    treasuryManager: '0x540C8c83F8173AD3835eefeaAdb91fe86E7189e2',
+    hazardEngine: '0x43634429c8Ff62D9808558cb150a76D32140Ba0e',
+    policyManager: '0xc1D0eeA34dAE0A76A7972412f802C4EA720C9B36',
+    keepersAdapter: '0x8A7149E93a5309f2B5Ca5BcdA8a1D5645026F1C8',
+    oracleAdapter: '0x0f43Ca50CFdFb916b2782b9cF878e3F422559524',
 
     // Chainlink Oracle
-    chainlinkUsdcUsd: '0x2489462e64Ea205386b7b8737609B3701047a77d',
+    chainlinkUsdcUsd: '0x7e860098F58bBFC8648a4311b374B1D669a2bc6B',
 
     // Keeper/Ops Wallet
     keeper: '0x680d25d5EdF4ccEC25800e0FA5B1C28D377703C0',
 
     // Legacy aliases (for backward compatibility)
-    curve: '0xf6d1a5107c8723bE3526972c4171968A724c50bF',  // hazardEngine
-    pool: '0xA659B64Dcb089f12c6B5dB85Dd1c29068a5b8a37',   // treasuryManager
-    pm: '0x277502A8a8763d2E83A747b030f7b67B1B90Dfa1',     // policyManager
-    adapter: '0xbaA261807195AD932382EE2AA9b6436C857E848f', // oracleAggregator
+    curve: '0x43634429c8Ff62D9808558cb150a76D32140Ba0e',  // hazardEngine
+    pool: '0x540C8c83F8173AD3835eefeaAdb91fe86E7189e2',   // treasuryManager
+    pm: '0xc1D0eeA34dAE0A76A7972412f802C4EA720C9B36',     // policyManager
+    adapter: '0xB203E42D84B70a60E3032F5Ed661C50cc7E9e3Cb', // oracleAggregator
   },
 } as const
 
