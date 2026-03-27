@@ -37,6 +37,7 @@ from terminal.src.telegram_format import (
     AlertState, format_telegram, format_plain,
     confidence_to_level, REGIME_TO_LEVEL
 )
+from terminal.src.chain_relay import ChainRelay
 
 
 # ─────────────────────────────────────────────
@@ -162,10 +163,11 @@ def send_startup_message(token: str, chat_id: str, assets: list):
 # ─────────────────────────────────────────────
 
 class AssetMonitor:
-    def __init__(self, asset: str, token: str, chat_id: str):
+    def __init__(self, asset: str, token: str, chat_id: str, chain_relay: ChainRelay = None):
         self.asset     = asset
         self.token     = token
         self.chat_id   = chat_id
+        self.chain_relay = chain_relay
         self.window    = WindowManager(max_hours=WINDOW_HOURS, min_hours=WARMUP_HOURS)
         self.engine    = SignalEngine(asset=asset)
         self.prev_regime = None
@@ -237,23 +239,41 @@ class AssetMonitor:
         else:
             print("  (Telegram not configured — console only)")
 
+        # On-chain relay: submit regime update to OracleAdapter
+        if self.chain_relay:
+            tx_hash = self.chain_relay.relay(
+                asset=self.asset,
+                regime=regime,
+                confidence=conf,
+                current_price=sig.current_price,
+                max_severity=sig.max_severity,
+            )
+            if tx_hash:
+                print(f"  Chain relay: tx {tx_hash}")
+            else:
+                print("  Chain relay: skipped or failed")
+
 
 # ─────────────────────────────────────────────
 # Main loop
 # ─────────────────────────────────────────────
 
 def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_INTERVAL_SECONDS):
+    # Initialize chain relay (no-op if env vars missing)
+    relay = ChainRelay()
+
     print("\n" + "="*56)
     print("DSRPT TERMINAL — LIVE MONITOR")
     print(f"Assets: {', '.join(assets)}")
     print(f"Poll: every {interval//60} minutes")
     print(f"Telegram: {'configured' if token else 'not configured (console only)'}")
+    print(f"Chain relay: {'online' if relay.enabled else 'not configured'}")
     print("="*56 + "\n")
 
     if token and chat_id:
         send_startup_message(token, chat_id, assets)
 
-    monitors = {asset: AssetMonitor(asset, token, chat_id) for asset in assets}
+    monitors = {asset: AssetMonitor(asset, token, chat_id, chain_relay=relay) for asset in assets}
     fail_counts = {asset: 0 for asset in assets}
 
     while True:
