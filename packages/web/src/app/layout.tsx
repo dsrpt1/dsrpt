@@ -1,7 +1,6 @@
 'use client'
 import { ReactNode } from 'react'
 import { ClerkProvider } from '@clerk/nextjs'
-import { dark } from '@clerk/themes'
 import { WagmiProvider } from 'wagmi'
 import { config } from '@/lib/wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -13,7 +12,7 @@ const queryClient = new QueryClient()
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <ClerkProvider appearance={{ baseTheme: dark }}>
+    <ClerkProvider>
       <html lang="en">
         <body>
           <WagmiProvider config={config}>
