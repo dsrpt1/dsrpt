@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { clerkClient } from '@clerk/nextjs/server'
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-03-31.basil' as Stripe.LatestApiVersion,
-})
-
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || ''
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
+    apiVersion: '2025-03-31.basil' as Stripe.LatestApiVersion,
+  })
+}
 
 // POST /api/webhook — Stripe webhook handler
 // Updates Clerk user metadata with subscription tier on payment events
@@ -14,9 +14,12 @@ export async function POST(req: NextRequest) {
   const body = await req.text()
   const sig = req.headers.get('stripe-signature') || ''
 
+  const stripe = getStripe()
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ''
+
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(body, sig, WEBHOOK_SECRET)
+    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
   } catch {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
