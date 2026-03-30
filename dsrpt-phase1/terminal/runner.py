@@ -38,6 +38,7 @@ from terminal.src.telegram_format import (
     confidence_to_level, REGIME_TO_LEVEL
 )
 from terminal.src.chain_relay import ChainRelay
+from terminal.src.db import SignalDB
 
 
 # ─────────────────────────────────────────────
@@ -163,11 +164,12 @@ def send_startup_message(token: str, chat_id: str, assets: list):
 # ─────────────────────────────────────────────
 
 class AssetMonitor:
-    def __init__(self, asset: str, token: str, chat_id: str, chain_relay: ChainRelay = None):
+    def __init__(self, asset: str, token: str, chat_id: str, chain_relay: ChainRelay = None, db: SignalDB = None):
         self.asset     = asset
         self.token     = token
         self.chat_id   = chat_id
         self.chain_relay = chain_relay
+        self.db        = db
         self.window    = WindowManager(max_hours=WINDOW_HOURS, min_hours=WARMUP_HOURS)
         self.engine    = SignalEngine(asset=asset)
         self.prev_regime = None
@@ -198,6 +200,20 @@ class AssetMonitor:
               f"${price:.4f}  "
               f"regime={regime:<22}  "
               f"{top}:{scores[top]:.2f}")
+
+        # Persist tick to database
+        if self.db:
+            conf = scores.get(regime, 0.5) if regime != "ambiguous" else 0.3
+            self.db.write_tick(
+                asset=self.asset,
+                ts=timestamp,
+                price=price,
+                volume=volume,
+                regime=regime,
+                confidence=conf,
+                max_severity=result.get("max_severity", 0),
+                partial_scores=scores,
+            )
 
         # Send alert if signal emitted
         if sig and sig.signal_type in ("TRANSITION", "COLDSTART", "WARNING"):
@@ -240,6 +256,7 @@ class AssetMonitor:
             print("  (Telegram not configured — console only)")
 
         # On-chain relay: submit regime update to OracleAdapter
+        tx_hash = None
         if self.chain_relay:
             tx_hash = self.chain_relay.relay(
                 asset=self.asset,
@@ -253,14 +270,31 @@ class AssetMonitor:
             else:
                 print("  Chain relay: skipped or failed")
 
+        # Persist alert to database
+        if self.db:
+            self.db.write_alert(
+                asset=self.asset,
+                ts=sig.timestamp,
+                signal_type=sig.signal_type,
+                regime=regime,
+                prev_regime=sig.prev_regime,
+                confidence=conf,
+                price=sig.current_price,
+                max_severity=sig.max_severity,
+                rule_fired=sig.rule_fired,
+                notes=sig.notes[:500] if sig.notes else "",
+                tx_hash=tx_hash,
+            )
+
 
 # ─────────────────────────────────────────────
 # Main loop
 # ─────────────────────────────────────────────
 
 def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_INTERVAL_SECONDS):
-    # Initialize chain relay (no-op if env vars missing)
+    # Initialize chain relay and database (no-op if env vars missing)
     relay = ChainRelay()
+    db = SignalDB()
 
     print("\n" + "="*56)
     print("DSRPT TERMINAL — LIVE MONITOR")
@@ -268,12 +302,13 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
     print(f"Poll: every {interval//60} minutes")
     print(f"Telegram: {'configured' if token else 'not configured (console only)'}")
     print(f"Chain relay: {'online' if relay.enabled else 'not configured'}")
+    print(f"Database: {'connected' if db.enabled else 'not configured'}")
     print("="*56 + "\n")
 
     if token and chat_id:
         send_startup_message(token, chat_id, assets)
 
-    monitors = {asset: AssetMonitor(asset, token, chat_id, chain_relay=relay) for asset in assets}
+    monitors = {asset: AssetMonitor(asset, token, chat_id, chain_relay=relay, db=db) for asset in assets}
     fail_counts = {asset: 0 for asset in assets}
 
     while True:
