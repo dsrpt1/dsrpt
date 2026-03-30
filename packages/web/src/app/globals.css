@@ -1131,6 +1131,18 @@ a:hover {
   line-height: 1.8;
 }
 
+.wp-figure {
+  margin: 24px 0 32px;
+}
+
+.wp-figure figcaption {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .whitepaper-page {
     grid-template-columns: 1fr;

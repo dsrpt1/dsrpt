@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 const sections = [
   {
@@ -85,6 +86,18 @@ early_late_ratio — Mean severity in first 25% vs last 25% of window. Values be
 recovery_completeness — How much of peak severity has resolved. Low values with high monotonicity confirm reflexive collapse.
 
 abandonment_signal — Gap between raw and adjusted recovery completeness. Detects volume-collapse masking true terminal severity (the asset is abandoned, not recovered).`,
+  },
+  {
+    id: 'backtest',
+    title: '5. Backtesting Results',
+    image: '/dsrpt-terminal-backtest.png',
+    content: `The classifier was validated against two canonical depeg events with distinct failure modes. The results demonstrate actionable lead time in both cases.
+
+UST/USD — May 2022 (Reflexive Collapse): The signal engine issued its first alert at $0.984, approximately 141 hours before the terminal trough at $0.018. The confidence trace shows reflexive collapse (red) rising sharply and sustaining above the alert threshold, while contained stress (orange) fired early warnings before the primary regime classification locked in. The monotonicity score and deterioration run features drove the trajectory-based classification — endpoint rules alone would have classified this as ambiguous until severity exceeded 30%.
+
+USDC/USD — March 2023 (Collateral Shock): First alert fired at $0.985, approximately 9 hours before the trough at $0.919. The confidence trace shows collateral shock (pink) rising rapidly on the initial drop, then declining as recovery completeness increased. Contained stress (orange) remained elevated throughout the recovery period. The early/late ratio and recovery completeness features correctly distinguished this bounded impairment event from a structural collapse.
+
+Key validation metrics: In both events, the signal engine provided actionable lead time before maximum drawdown. Critically, the regime classifications were correct — UST was identified as reflexive collapse (one-way, no floor) while USDC was identified as collateral shock (bounded, recoverable). This distinction drives different premium loading (halt vs 1.50x) and different LP action guidance (reduce exposure vs hold/monitor).`,
   },
   {
     id: 'pricing',
@@ -215,6 +228,19 @@ export default function WhitepaperPage() {
         {sections.map((section) => (
           <section key={section.id} id={section.id} className="wp-section">
             <h2>{section.title}</h2>
+            {'image' in section && section.image && (
+              <figure className="wp-figure">
+                <Image
+                  src={section.image}
+                  alt={section.title}
+                  width={1600}
+                  height={1024}
+                  style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}
+                  priority={false}
+                />
+                <figcaption>Dsrpt Terminal backtest: UST reflexive collapse (141h lead time) and USDC collateral shock (9h lead time). Confidence traces show regime classification scores over time.</figcaption>
+              </figure>
+            )}
             {section.content.split('\n\n').map((para, i) => (
               <p key={i}>{para}</p>
             ))}
