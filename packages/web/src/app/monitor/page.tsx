@@ -10,6 +10,7 @@ import FundPoolModal from '@/components/FundPoolModal';
 import CreatePolicyModal from '@/components/CreatePolicyModal';
 import Navigation from '@/components/Navigation';
 import SignalPanel from '@/components/SignalPanel';
+import SignalChart from '@/components/SignalChart';
 import { ADDRESSES, PERIL_IDS } from '@/lib/addresses';
 import { TREASURY_MANAGER_ABI, HAZARD_ENGINE_ABI, ORACLE_AGGREGATOR_ABI } from '@/lib/abis';
 
@@ -298,6 +299,12 @@ export default function Page() {
             </div>
           </div>
         </section>
+      </div>
+
+      {/* Signal Charts */}
+      <div className="charts-grid">
+        <SignalChart symbol="USDC" />
+        <SignalChart symbol="USDT" />
       </div>
 
       {/* Bottom Stats Bar */}
