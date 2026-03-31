@@ -18,7 +18,10 @@ from typing import Optional
 
 try:
     from web3 import Web3
-    from web3.middleware import ExtraDataToPOAMiddleware
+    try:
+        from web3.middleware import ExtraDataToPOAMiddleware
+    except ImportError:
+        ExtraDataToPOAMiddleware = None
     HAS_WEB3 = True
 except ImportError:
     HAS_WEB3 = False
@@ -88,7 +91,8 @@ class ChainRelay:
 
         try:
             self.w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 30}))
-            self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+            if ExtraDataToPOAMiddleware is not None:
+                self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
             if not self.w3.is_connected():
                 log.error(f"Cannot connect to RPC: {rpc_url}")
