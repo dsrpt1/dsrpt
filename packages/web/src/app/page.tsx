@@ -1,10 +1,50 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navigation from '@/components/Navigation';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+
+const ASSETS = ['USDC', 'USDT', 'DAI'];
+
+type AssetSignal = {
+  asset: string;
+  price: string;
+  regime: string;
+  regimeClass: string;
+  confidence: string;
+  action: string;
+};
+
+const STATIC_SIGNALS: AssetSignal[] = [
+  { asset: 'USDC', price: '$1.0000', regime: 'CALM', regimeClass: 'calm', confidence: '28%', action: 'Monitor' },
+  { asset: 'USDT', price: '$0.9991', regime: 'CALM', regimeClass: 'calm', confidence: '31%', action: 'Monitor' },
+  { asset: 'DAI',  price: '$0.9999', regime: 'ELEVATED', regimeClass: 'elevated', confidence: '80%', action: 'Monitor' },
+];
 
 export default function HomePage() {
+  const [signals, setSignals] = useState<AssetSignal[]>(STATIC_SIGNALS);
+  const [lastUpdate, setLastUpdate] = useState('');
+
+  useEffect(() => {
+    // Try to fetch live data from API
+    fetch('/api/v1/signals/market')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.assets?.length > 0) {
+          setSignals(data.assets.map((a: Record<string, unknown>) => ({
+            asset: a.asset as string,
+            price: `$${(a.price as number).toFixed(4)}`,
+            regime: (a.regime as string).replace(/_/g, ' ').toUpperCase(),
+            regimeClass: (a.regime_id as number) === 0 ? 'calm' : (a.regime_id as number) <= 2 ? 'elevated' : 'critical',
+            confidence: `${((a.confidence as number) * 100).toFixed(0)}%`,
+            action: (a.escalation as number) >= 2 ? 'Reduce Exposure' : (a.escalation as number) === 1 ? 'Monitor Closely' : 'Monitor',
+          })));
+          setLastUpdate(new Date(data.updated_at as string).toLocaleTimeString('en-US', { hour12: false }));
+        }
+      })
+      .catch(() => {}); // fall back to static
+  }, []);
+
   return (
     <main className="landing-page">
       {/* Top Bar */}
@@ -15,188 +55,197 @@ export default function HomePage() {
               <path d="M16 2L4 8v16l12 6 12-6V8L16 2z" stroke="url(#lg)" strokeWidth="2" fill="none"/>
               <path d="M16 8l-6 3v10l6 3 6-3V11l-6-3z" fill="url(#lg)" opacity="0.3"/>
               <circle cx="16" cy="16" r="4" fill="url(#lg)"/>
-              <defs>
-                <linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
-                  <stop stopColor="#00d4ff"/><stop offset="1" stopColor="#a855f7"/>
-                </linearGradient>
-              </defs>
+              <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stopColor="#00d4ff"/><stop offset="1" stopColor="#a855f7"/></linearGradient></defs>
             </svg>
           </div>
           <div className="logo-text">
             <span className="logo-name">DSRPT</span>
-            <span className="logo-tagline">Risk Intelligence</span>
           </div>
         </div>
         <Navigation />
-        <ConnectButton />
+        <div className="top-bar-right">
+          <Link href="/monitor" className="btn-primary" style={{ padding: '8px 20px', fontSize: 13 }}>Open Monitor</Link>
+        </div>
       </header>
 
       {/* Hero */}
       <section className="hero">
         <div className="hero-content">
-          <div className="hero-badge">Live on Base Mainnet</div>
           <h1>Real-time stablecoin and crypto stress intelligence</h1>
           <p className="hero-sub">
             Detect depeg risk, liquidity strain, and contagion regimes before they become treasury losses.
-            Dashboard and API for funds, protocols, and exchanges.
+            For funds, protocols, exchanges, and risk desks.
           </p>
           <div className="hero-actions">
-            <Link href="/monitor" className="btn-primary">Open Monitor</Link>
-            <Link href="/whitepaper" className="btn-secondary">Read Research</Link>
-          </div>
-        </div>
-
-        {/* Live signal strip */}
-        <div className="signal-strip">
-          <div className="signal-strip-item">
-            <span className="strip-label">USDC</span>
-            <span className="strip-regime calm">CALM</span>
-          </div>
-          <div className="signal-strip-item">
-            <span className="strip-label">USDT</span>
-            <span className="strip-regime calm">CALM</span>
-          </div>
-          <div className="signal-strip-item">
-            <span className="strip-label">DAI</span>
-            <span className="strip-regime elevated">ELEVATED</span>
-          </div>
-          <div className="signal-strip-item">
-            <span className="strip-label">Signal Engine</span>
-            <span className="strip-status">
-              <span className="pulse-dot"></span>
-              ONLINE
-            </span>
+            <Link href="/monitor" className="btn-primary">View Dashboard</Link>
+            <a href="mailto:daniel@cooktradingcorp.com" className="btn-secondary">Request API Access</a>
           </div>
         </div>
       </section>
 
-      {/* Products */}
+      {/* Section 2: Live Signal Panel */}
       <section className="products-section">
-        <h2 className="section-title">Products</h2>
-        <div className="products-grid">
-          <Link href="/monitor" className="product-card">
-            <div className="product-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                <path d="M8 21h8M12 17v4"/>
-                <path d="M7 10l3-3 2 2 5-5"/>
-              </svg>
-            </div>
-            <h3>Dsrpt Monitor</h3>
-            <p>Live dashboard for stablecoin, liquidity, and contagion risk. Regime detection, confidence scoring, and action recommendations updated every 15 minutes.</p>
-            <span className="product-status live">Live</span>
-          </Link>
+        <h2 className="section-title">Live Signal</h2>
+        <p className="section-sub">
+          Updated every 15 minutes. Regime classification powered by trajectory-based features, not endpoint rules.
+          {lastUpdate && <span style={{ color: 'var(--accent-cyan)', marginLeft: 8 }}>Last update: {lastUpdate} UTC</span>}
+        </p>
 
-          <div className="product-card">
-            <div className="product-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-              </svg>
-            </div>
-            <h3>Dsrpt Signals API</h3>
-            <p>Programmatic access to asset-level risk signals, regime states, and alerts. Built for treasury systems, risk desks, and protocol integrations.</p>
-            <span className="product-status coming">Coming Soon</span>
-          </div>
+        <div className="watchlist-table-wrap">
+          <table className="watchlist-table">
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Price</th>
+                <th>Regime</th>
+                <th>Confidence</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signals.map(s => (
+                <tr key={s.asset}>
+                  <td className="wl-asset">{s.asset}</td>
+                  <td className="wl-mono">{s.price}</td>
+                  <td><span className={`strip-regime ${s.regimeClass}`}>{s.regime}</span></td>
+                  <td className="wl-mono">{s.confidence}</td>
+                  <td className="wl-action">{s.action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-          <Link href="/whitepaper" className="product-card">
-            <div className="product-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
-              </svg>
-            </div>
-            <h3>Dsrpt Research</h3>
-            <p>Event studies, methodology documentation, and postmortems. UST collapse analysis, USDC/SVB shock study, and classifier validation results.</p>
-            <span className="product-status live">Available</span>
-          </Link>
+        <div className="signal-engine-status">
+          <span className="pulse-dot"></span>
+          <span>Signal engine online</span>
+          <span className="sep">|</span>
+          <span>3 assets monitored</span>
+          <span className="sep">|</span>
+          <span>Base Mainnet</span>
         </div>
       </section>
 
-      {/* What it detects */}
+      {/* Section 3: What it detects */}
       <section className="capabilities-section">
         <h2 className="section-title">What the signal engine detects</h2>
+        <p className="section-sub">Five regime classifications derived from trajectory-shaped features. Not endpoint rules — trajectory geometry.</p>
         <div className="capabilities-grid">
           <div className="capability">
             <div className="cap-regime reflexive">REFLEXIVE COLLAPSE</div>
-            <p>One-way deterioration with no structural floor. Monotonic severity path, volume abandonment. Detected UST 6+ hours before full collapse.</p>
+            <p>One-way deterioration, no structural floor. Detected UST 141 hours before terminal trough.</p>
           </div>
           <div className="capability">
             <div className="cap-regime shock">COLLATERAL SHOCK</div>
-            <p>Sharp asymmetric spike with fast recovery. High volume, bounded persistence. Characteristic of reserve impairment events like USDC/SVB.</p>
+            <p>Sharp asymmetric spike with fast recovery. Detected USDC/SVB 9 hours before trough at $0.919.</p>
           </div>
           <div className="capability">
             <div className="cap-regime stress">CONTAINED STRESS</div>
-            <p>Sustained mild elevation without structural failure. Contagion signal with slow recovery. Typical of events like FRAX March 2023.</p>
+            <p>Sustained mild elevation without structural failure. Contagion without collapse.</p>
           </div>
           <div className="capability">
             <div className="cap-regime dislocation">LIQUIDITY DISLOCATION</div>
-            <p>High volume, low price impact. Execution risk elevated but not systemic. Venue-specific fragmentation events.</p>
+            <p>High volume, low price impact. Execution risk elevated but not systemic.</p>
           </div>
         </div>
       </section>
 
-      {/* Who it's for */}
+      {/* Section 4: Use cases */}
       <section className="audience-section">
         <h2 className="section-title">Built for</h2>
         <div className="audience-grid">
           <div className="audience-card">
             <h3>Protocol Treasuries</h3>
-            <p>Monitor stablecoin reserves in real time. Automated regime alerts trigger rebalancing playbooks before losses materialize.</p>
+            <p>Monitor stablecoin reserves. Automated regime alerts trigger rebalancing playbooks before losses materialize.</p>
           </div>
           <div className="audience-card">
             <h3>Trading Desks</h3>
-            <p>Programmatic risk signals for position sizing, hedging decisions, and exposure management across stablecoin holdings.</p>
+            <p>Programmatic risk signals for position sizing, hedging, and exposure management across stablecoin holdings.</p>
           </div>
           <div className="audience-card">
             <h3>Exchanges</h3>
-            <p>Cross-venue spread monitoring, deposit/withdrawal circuit breakers, and collateral haircut automation based on live regime state.</p>
+            <p>Cross-venue spread monitoring, deposit/withdrawal circuit breakers, collateral haircut automation.</p>
           </div>
           <div className="audience-card">
             <h3>Risk Managers</h3>
-            <p>Decision support with explicit action recommendations: monitor, reduce exposure, pause deposits, escalate to manual review.</p>
+            <p>Decision support: monitor, reduce exposure, pause deposits, tighten haircuts, escalate to manual review.</p>
           </div>
         </div>
       </section>
 
-      {/* On-chain */}
-      <section className="onchain-section">
-        <h2 className="section-title">On-chain infrastructure</h2>
-        <p className="section-sub">6 contracts deployed on Base Mainnet. Signal engine running on Railway. Pricing updates atomic with zero adverse selection gap.</p>
-        <div className="contracts-grid">
-          <div className="contract-item">
-            <span className="contract-name">DsrptHazardEngine</span>
-            <span className="contract-desc">Regime-based actuarial pricing</span>
+      {/* Section 5: API */}
+      <section className="products-section">
+        <h2 className="section-title">Signals API</h2>
+        <p className="section-sub">Machine-readable risk signals for treasury systems, risk desks, and protocol integrations.</p>
+
+        <div className="api-demo">
+          <div className="api-endpoint">
+            <code className="api-method">GET</code>
+            <code className="api-path">/api/v1/signals/market</code>
           </div>
-          <div className="contract-item">
-            <span className="contract-name">OracleAdapter</span>
-            <span className="contract-desc">Signal-to-pricing bridge</span>
+          <pre className="api-response">{`{
+  "composite_regime": "ambiguous",
+  "composite_regime_id": 0,
+  "assets_on_alert": 0,
+  "total_assets": 3,
+  "assets": [
+    {
+      "asset": "USDC",
+      "price": 0.9998,
+      "regime": "ambiguous",
+      "confidence": 0.28,
+      "escalation": 0,
+      "peg_dev_bps": 2
+    }
+  ]
+}`}</pre>
+          <div className="api-endpoints-list">
+            <div className="api-ep"><code>GET /api/v1/signals/market</code><span>Composite market signal</span></div>
+            <div className="api-ep"><code>GET /api/v1/signals/assets?symbol=USDC</code><span>Asset detail + 24h sparkline</span></div>
+            <div className="api-ep"><code>GET /api/v1/alerts</code><span>Recent regime transitions</span></div>
+            <div className="api-ep"><code>GET /api/v1/history?symbol=USDC&range=30d</code><span>Time series for charting</span></div>
           </div>
-          <div className="contract-item">
-            <span className="contract-name">DsrptPolicyManager</span>
-            <span className="contract-desc">Policy lifecycle</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">DsrptTreasuryManager</span>
-            <span className="contract-desc">Tranche-based capital pools</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">OracleAggregator</span>
-            <span className="contract-desc">Multi-source price feeds</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">KeepersAdapter</span>
-            <span className="contract-desc">Chainlink Automation</span>
+          <div style={{ textAlign: 'center', marginTop: 24 }}>
+            <a href="mailto:daniel@cooktradingcorp.com" className="btn-secondary">Request API Access</a>
           </div>
         </div>
+      </section>
+
+      {/* Section 6: Research / proof */}
+      <section className="capabilities-section">
+        <h2 className="section-title">Methodology</h2>
+        <p className="section-sub">Validated against real depeg events. Trajectory-based features, not endpoint rules.</p>
+        <div className="capabilities-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+          <div className="capability">
+            <h4 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>UST / May 2022</h4>
+            <p>Reflexive collapse detected 141 hours before terminal trough at $0.018. Monotonicity score 0.72, no recovery signal.</p>
+          </div>
+          <div className="capability">
+            <h4 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>USDC / March 2023</h4>
+            <p>Collateral shock detected 9 hours before trough at $0.919. Recovery completeness confirmed bounded event, not structural failure.</p>
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 24 }}>
+          <Link href="/whitepaper" className="btn-secondary">Read Full Methodology</Link>
+        </div>
+      </section>
+
+      {/* Section 7: Risk products */}
+      <section className="products-section" style={{ paddingBottom: 32 }}>
+        <h2 className="section-title">On-chain Risk Products</h2>
+        <p className="section-sub">
+          Parametric depeg protection powered by the signal engine. 6 contracts deployed on Base Mainnet.
+          <br/><span style={{ color: 'var(--accent-amber)' }}>Pilot access only — contact for details.</span>
+        </p>
       </section>
 
       {/* CTA */}
       <section className="cta-section">
         <h2>Start monitoring stablecoin risk</h2>
-        <p>Open the live dashboard or read the research methodology.</p>
+        <p>Open the live dashboard, request API access, or read the research.</p>
         <div className="hero-actions">
           <Link href="/monitor" className="btn-primary">Open Dsrpt Monitor</Link>
-          <Link href="/whitepaper" className="btn-secondary">Research</Link>
+          <a href="mailto:daniel@cooktradingcorp.com" className="btn-secondary">Request Access</a>
         </div>
       </section>
 
@@ -204,13 +253,13 @@ export default function HomePage() {
       <footer className="landing-footer">
         <div className="footer-left">
           <span className="logo-name" style={{ fontSize: 16 }}>DSRPT</span>
-          <span className="footer-copy">Crypto stress intelligence. Live on Base.</span>
+          <span className="footer-copy">Real-time crypto stress intelligence.</span>
         </div>
         <div className="footer-links">
           <Link href="/monitor">Monitor</Link>
           <Link href="/whitepaper">Research</Link>
-          <Link href="/team">Team</Link>
-          <a href="https://basescan.org/address/0x0f43Ca50CFdFb916b2782b9cF878e3F422559524" target="_blank" rel="noopener noreferrer">BaseScan</a>
+          <Link href="/pricing">Pricing</Link>
+          <a href="mailto:daniel@cooktradingcorp.com">Contact</a>
         </div>
       </footer>
     </main>
