@@ -24,9 +24,14 @@ import os
 import sys
 import time
 import argparse
+
+print("[boot] starting imports...", flush=True)
+
 import requests
 import pandas as pd
 from datetime import datetime, timezone, timedelta
+
+print("[boot] stdlib + pandas ok", flush=True)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -37,8 +42,16 @@ from terminal.src.telegram_format import (
     AlertState, format_telegram, format_plain,
     confidence_to_level, REGIME_TO_LEVEL
 )
+
+print("[boot] signal engine ok", flush=True)
+
 from terminal.src.chain_relay import ChainRelay
+
+print("[boot] chain_relay ok", flush=True)
+
 from terminal.src.db import SignalDB
+
+print("[boot] db ok", flush=True)
 
 
 # ─────────────────────────────────────────────
