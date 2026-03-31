@@ -7,8 +7,9 @@ const navItems = [
   { href: '/', label: 'Platform' },
   { href: '/monitor', label: 'Monitor' },
   { href: '/whitepaper', label: 'Research' },
+  { href: '/how-it-works', label: 'How It Works' },
+  { href: '/api-docs', label: 'API' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/how-it-works', label: 'API' },
 ];
 
 export default function Navigation() {
