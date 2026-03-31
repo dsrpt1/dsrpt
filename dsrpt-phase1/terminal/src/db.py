@@ -25,6 +25,20 @@ try:
 except ImportError:
     HAS_PG = False
 
+
+def _to_float(v) -> float:
+    """Convert numpy float64 or any numeric to plain Python float."""
+    if v is None:
+        return 0.0
+    return float(v)
+
+
+def _to_int(v) -> int:
+    """Convert numpy int or any numeric to plain Python int."""
+    if v is None:
+        return 0
+    return int(v)
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS signal_ticks (
     id              BIGSERIAL PRIMARY KEY,
@@ -143,7 +157,10 @@ class SignalDB:
         regime_id = REGIME_TO_ID.get(regime, 0)
         escalation = _derive_escalation(regime, confidence)
         mult = MULT.get(regime, 10000)
-        peg_dev_bps = max(0, int(abs(1.0 - price) * 10000))
+        peg_dev_bps = max(0, int(abs(1.0 - _to_float(price)) * 10000))
+
+        # Convert all numpy types to plain Python types
+        clean_scores = {k: _to_float(v) for k, v in partial_scores.items()} if partial_scores else {}
 
         try:
             with self.conn.cursor() as cur:
@@ -152,8 +169,9 @@ class SignalDB:
                        (asset, ts, price, volume, regime, regime_id, confidence,
                         escalation, premium_mult, peg_dev_bps, max_severity, partial_scores)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                    (asset, ts, price, volume, regime, regime_id, confidence,
-                     escalation, mult, peg_dev_bps, max_severity, Json(partial_scores)),
+                    (asset, ts, _to_float(price), _to_float(volume), regime,
+                     regime_id, _to_float(confidence), escalation, mult,
+                     peg_dev_bps, _to_float(max_severity), Json(clean_scores)),
                 )
         except Exception as e:
             log.error(f"Failed to write tick: {e}")
@@ -183,8 +201,9 @@ class SignalDB:
                        (asset, ts, signal_type, regime, prev_regime, confidence,
                         price, max_severity, rule_fired, notes, tx_hash)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                    (asset, ts, signal_type, regime, prev_regime, confidence,
-                     price, max_severity, rule_fired, notes, tx_hash),
+                    (asset, ts, signal_type, regime, prev_regime,
+                     _to_float(confidence), _to_float(price),
+                     _to_float(max_severity), rule_fired, notes, tx_hash),
                 )
         except Exception as e:
             log.error(f"Failed to write alert: {e}")
