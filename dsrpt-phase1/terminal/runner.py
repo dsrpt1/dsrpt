@@ -309,14 +309,15 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
     relay = ChainRelay()
     db = SignalDB()
 
-    print("\n" + "="*56)
-    print("DSRPT TERMINAL — LIVE MONITOR")
-    print(f"Assets: {', '.join(assets)}")
-    print(f"Poll: every {interval//60} minutes")
-    print(f"Telegram: {'configured' if token else 'not configured (console only)'}")
-    print(f"Chain relay: {'online' if relay.enabled else 'not configured'}")
-    print(f"Database: {'connected' if db.enabled else 'not configured'}")
-    print("="*56 + "\n")
+    print("\n" + "="*56, flush=True)
+    print("DSRPT TERMINAL — LIVE MONITOR", flush=True)
+    print(f"Assets: {', '.join(assets)}", flush=True)
+    print(f"Poll: every {interval//60} minutes", flush=True)
+    print(f"Telegram: {'configured' if token else 'not configured (console only)'}", flush=True)
+    print(f"Chain relay: {'online' if relay.enabled else 'not configured'}", flush=True)
+    print(f"Database: {'connected' if db.enabled else 'not configured'}", flush=True)
+    print(f"DATABASE_URL set: {bool(os.environ.get('DATABASE_URL', ''))}", flush=True)
+    print("="*56 + "\n", flush=True)
 
     if token and chat_id:
         send_startup_message(token, chat_id, assets)
