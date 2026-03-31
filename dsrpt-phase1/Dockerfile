@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Cache bust: 2026-03-31
+ARG CACHEBUST=2
+
 # Install Python deps (web3 + psycopg2 for chain relay and database)
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
