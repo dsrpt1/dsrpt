@@ -5,6 +5,7 @@ export const ADDRESSES = {
   base: {
     // Core Assets
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    usdt: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
 
     // DSRPT Protocol Contracts (production deployment)
     oracleAggregator: '0xB203E42D84B70a60E3032F5Ed661C50cc7E9e3Cb',
@@ -31,6 +32,7 @@ export const ADDRESSES = {
 // Peril IDs
 export const PERIL_IDS = {
   USDC_DEPEG: '0x6cdb2b1f320420e8bcd2f00c91695a104bd6066ad93d0ccbd0195a603747ed1f',
+  USDT_DEPEG: '0x073146c315d13913647c4f8d0fe5ef4976515fef6adcdef2261fdb55bf15b16a',
 } as const
 
 // Tranche IDs for Treasury

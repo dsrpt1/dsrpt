@@ -10,6 +10,11 @@ type Props = {
   onClose: () => void
 }
 
+const ASSET_OPTIONS = [
+  { label: 'USDC', value: 'usdc', perilId: PERIL_IDS.USDC_DEPEG, minPremium: '0.25%' },
+  { label: 'USDT', value: 'usdt', perilId: PERIL_IDS.USDT_DEPEG, minPremium: '0.30%' },
+] as const
+
 const DURATION_OPTIONS = [
   { label: '7 days', value: 7 },
   { label: '14 days', value: 14 },
@@ -25,12 +30,17 @@ const FALLBACK_PREMIUM_BPS = 500n
 
 export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   const [coverage, setCoverage] = useState('')
+  const [selectedAsset, setSelectedAsset] = useState(ASSET_OPTIONS[0])
   const [duration, setDuration] = useState(DURATION_OPTIONS[0])
   const [step, setStep] = useState<'input' | 'approve' | 'create'>('input')
   const { address } = useAccount()
   const A = ADDRESSES.base
 
-  // Calculate coverage in base units (6 decimals for USDC)
+  // Resolve addresses for selected asset
+  const assetAddress = A[selectedAsset.value as keyof typeof A] as string
+  const perilId = selectedAsset.perilId
+
+  // Calculate coverage in base units (6 decimals for USDC/USDT)
   const coverageBn = coverage ? parseUnits(coverage, 6) : 0n
 
   // Fetch premium from HazardEngine using new interface
@@ -39,7 +49,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
     address: A.hazardEngine as `0x${string}`,
     abi: HAZARD_ENGINE_ABI,
     functionName: 'quotePremium',
-    args: [PERIL_IDS.USDC_DEPEG as `0x${string}`, BigInt(duration.value), coverageBn],
+    args: [perilId as `0x${string}`, BigInt(duration.value), coverageBn],
     query: { enabled: coverageBn > 0n },
   })
 
@@ -48,12 +58,12 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
     address: A.hazardEngine as `0x${string}`,
     abi: HAZARD_ENGINE_ABI,
     functionName: 'getCurrentRegime',
-    args: [PERIL_IDS.USDC_DEPEG as `0x${string}`],
+    args: [perilId as `0x${string}`],
   })
 
-  // Check USDC allowance for PolicyManager
+  // Check allowance for selected asset -> PolicyManager
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
-    address: A.usdc as `0x${string}`,
+    address: assetAddress as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: address ? [address, A.policyManager as `0x${string}`] : undefined,
@@ -95,7 +105,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
     if (!effectivePremium) return
     setStep('approve')
     approve({
-      address: A.usdc as `0x${string}`,
+      address: assetAddress as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [A.policyManager as `0x${string}`, effectivePremium],
@@ -110,7 +120,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
       abi: POLICY_MANAGER_ABI,
       functionName: 'issueFixedPolicy',
       args: [
-        PERIL_IDS.USDC_DEPEG as `0x${string}`,
+        perilId as `0x${string}`,
         address,
         coverageBn,
         duration.value,
@@ -120,6 +130,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
 
   const handleClose = () => {
     setCoverage('')
+    setSelectedAsset(ASSET_OPTIONS[0])
     setDuration(DURATION_OPTIONS[0])
     setStep('input')
     onClose()
@@ -184,11 +195,11 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
             <div style={{ marginTop: 16, padding: 16, background: 'rgba(0,0,0,0.2)', borderRadius: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Coverage</span>
-                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{coverage} USDC</span>
+                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{coverage} {selectedAsset.label}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Premium Paid</span>
-                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{premiumFormatted} USDC</span>
+                <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{premiumFormatted} {selectedAsset.label}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Duration</span>
@@ -246,10 +257,44 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </div>
             )}
 
+            {/* Asset Selection */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
+                Protected Asset
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${ASSET_OPTIONS.length}, 1fr)`, gap: 8 }}>
+                {ASSET_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSelectedAsset(opt)}
+                    style={{
+                      padding: '12px 8px',
+                      background: selectedAsset.value === opt.value
+                        ? 'rgba(0, 212, 255, 0.2)'
+                        : 'rgba(0, 0, 0, 0.2)',
+                      border: selectedAsset.value === opt.value
+                        ? '1px solid rgba(0, 212, 255, 0.5)'
+                        : '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 8,
+                      color: selectedAsset.value === opt.value ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                      min {opt.minPremium}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Coverage Amount */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
-                Coverage Amount (USDC)
+                Coverage Amount ({selectedAsset.label})
               </label>
               <input
                 type="number"
@@ -268,7 +313,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 }}
               />
               <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 12 }}>
-                Amount you&apos;ll receive if USDC depegs below threshold
+                Amount you&apos;ll receive if {selectedAsset.label} depegs below threshold
               </div>
             </div>
 
@@ -354,11 +399,11 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Summary</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'var(--text-muted)' }}>You pay</span>
-                  <span style={{ color: 'var(--accent-purple)' }}>{premiumFormatted} USDC</span>
+                  <span style={{ color: 'var(--accent-purple)' }}>{premiumFormatted} {selectedAsset.label}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'var(--text-muted)' }}>You receive if depeg</span>
-                  <span style={{ color: 'var(--accent-cyan)' }}>{coverage} USDC</span>
+                  <span style={{ color: 'var(--accent-cyan)' }}>{coverage} {selectedAsset.label}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Protection period</span>
@@ -387,7 +432,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
                   opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
                 }}
               >
-                {approving || waitingApprove ? 'Approving USDC...' : 'Approve USDC'}
+                {approving || waitingApprove ? `Approving ${selectedAsset.label}...` : `Approve ${selectedAsset.label}`}
               </button>
             ) : (
               <button
