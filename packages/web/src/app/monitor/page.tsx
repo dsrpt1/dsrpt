@@ -2,20 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useReadContract } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import Navigation from '@/components/Navigation';
 import SignalPanel from '@/components/SignalPanel';
 import SignalChart from '@/components/SignalChart';
+import CreatePolicyModal from '@/components/CreatePolicyModal';
 import { ADDRESSES, PERIL_IDS } from '@/lib/addresses';
 import { HAZARD_ENGINE_ABI, ORACLE_AGGREGATOR_ABI } from '@/lib/abis';
 
 const REGIME_LABELS = ['CALM', 'VOLATILE', 'CRISIS'] as const;
 
 export default function MonitorPage() {
+  const { isConnected } = useAccount();
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [createPolicyOpen, setCreatePolicyOpen] = useState(false);
 
-  // Read current risk regime from HazardEngine
   const { data: currentRegime } = useReadContract({
     address: ADDRESSES.base.hazardEngine as `0x${string}`,
     abi: HAZARD_ENGINE_ABI,
@@ -24,7 +26,6 @@ export default function MonitorPage() {
     query: { refetchInterval: 30_000 },
   });
 
-  // Read latest snapshot from OracleAggregator
   const { data: snapshotData } = useReadContract({
     address: ADDRESSES.base.oracleAggregator as `0x${string}`,
     abi: ORACLE_AGGREGATOR_ABI,
@@ -94,12 +95,10 @@ export default function MonitorPage() {
         <ConnectButton />
       </header>
 
-      {/* Signal Panel + Charts Grid */}
+      {/* Signal Panel + Charts */}
       <div className="dashboard-grid" style={{ gridTemplateColumns: '340px 1fr' }}>
-        {/* Left: Signal Engine Panel */}
         <SignalPanel />
 
-        {/* Right: Charts stacked */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <SignalChart symbol="USDC" />
           <SignalChart symbol="USDT" />
@@ -107,7 +106,82 @@ export default function MonitorPage() {
         </div>
       </div>
 
-      {/* Bottom Status */}
+      {/* Risk Products — below signal intelligence */}
+      <section className="panel" style={{ marginTop: 0 }}>
+        <div className="panel-header">
+          <h2>Risk Products</h2>
+          <span className="panel-badge" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#a855f7' }}>PILOT</span>
+        </div>
+        <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+          {/* Buy Protection */}
+          <button
+            className={`action-card ${isConnected ? 'active' : 'disabled'}`}
+            onClick={() => setCreatePolicyOpen(true)}
+            disabled={!isConnected}
+            style={{ textAlign: 'left', cursor: isConnected ? 'pointer' : 'default' }}
+          >
+            <div className="action-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M9 12l2 2 4-4"/>
+              </svg>
+            </div>
+            <div className="action-content">
+              <span className="action-title">Buy Depeg Protection</span>
+              <span className="action-desc">
+                {isConnected
+                  ? 'USDC coverage — premium calculated from live hazard curve and current regime'
+                  : 'Connect wallet to access risk products'}
+              </span>
+            </div>
+            <div className="action-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </button>
+
+          {/* Coverage info */}
+          <div style={{
+            padding: '20px',
+            background: 'rgba(0,0,0,0.15)',
+            borderRadius: 12,
+            border: '1px solid var(--border-subtle)',
+          }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+              Coverage Parameters
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Assets</span>
+                <span style={{ color: 'var(--text-primary)' }}>USDC, USDT</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Trigger</span>
+                <span style={{ color: 'var(--text-primary)' }}>&lt; $0.98</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Min Premium</span>
+                <span style={{ color: 'var(--text-primary)' }}>0.25% (USDC) / 0.30% (USDT)</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Duration</span>
+                <span style={{ color: 'var(--text-primary)' }}>7 / 14 / 30 / 90 days</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Settlement</span>
+                <span style={{ color: 'var(--text-primary)' }}>Parametric (automatic)</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Oracle</span>
+                <span style={{ color: 'var(--text-primary)' }}>Chainlink + Signal Engine</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
       <footer className="stats-bar">
         <div className="stat-item">
           <span className="stat-label">Signal Engine</span>
@@ -129,6 +203,9 @@ export default function MonitorPage() {
           <span className="stat-value">0x0f43...9524</span>
         </div>
       </footer>
+
+      {/* Policy Modal */}
+      <CreatePolicyModal isOpen={createPolicyOpen} onClose={() => setCreatePolicyOpen(false)} />
     </main>
   );
 }
