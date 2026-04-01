@@ -374,6 +374,13 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
                 timestamp = data["timestamp"],
             )
 
+        # Refresh on-chain oracle snapshots (Chainlink price data)
+        if relay.enabled:
+            for asset in ["USDC", "USDT"]:
+                tx = relay.refresh_oracle(asset)
+                if tx:
+                    print(f"  Oracle refresh [{asset}]: {tx}", flush=True)
+
         # Sleep until next poll
         elapsed = (datetime.now(tz=timezone.utc) - tick_start).total_seconds()
         sleep_s = max(0, interval - elapsed)

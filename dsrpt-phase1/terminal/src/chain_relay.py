@@ -54,6 +54,23 @@ ADAPTER_ABI = [
     },
 ]
 
+# ABI for OracleAggregator.recordSnapshot()
+AGGREGATOR_ABI = [
+    {
+        "type": "function",
+        "name": "recordSnapshot",
+        "stateMutability": "nonpayable",
+        "inputs": [{"name": "perilId", "type": "bytes32"}],
+        "outputs": [],
+    },
+]
+
+# Peril IDs (must match on-chain)
+PERIL_IDS = {
+    "USDC": "0x6cdb2b1f320420e8bcd2f00c91695a104bd6066ad93d0ccbd0195a603747ed1f",
+    "USDT": "0x073146c315d13913647c4f8d0fe5ef4976515fef6adcdef2261fdb55bf15b16a",
+}
+
 # USDC on Base
 ASSET_ADDRESSES = {
     "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -104,6 +121,17 @@ class ChainRelay:
                 address=self.adapter_address,
                 abi=ADAPTER_ABI,
             )
+
+            # OracleAggregator for refreshing price snapshots
+            aggregator_addr = os.environ.get(
+                "DSRPT_AGGREGATOR_ADDRESS",
+                "0xB203E42D84B70a60E3032F5Ed661C50cc7E9e3Cb",
+            )
+            self.aggregator = self.w3.eth.contract(
+                address=Web3.to_checksum_address(aggregator_addr),
+                abi=AGGREGATOR_ABI,
+            )
+
             self.enabled = True
 
             chain_id = self.w3.eth.chain_id
@@ -210,3 +238,36 @@ class ChainRelay:
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         return tx_hash.hex()
+
+    def refresh_oracle(self, asset: str) -> Optional[str]:
+        """
+        Call OracleAggregator.recordSnapshot() to refresh the on-chain
+        Chainlink price for a given asset. Called every poll tick.
+        """
+        if not self.enabled:
+            return None
+
+        peril_id = PERIL_IDS.get(asset)
+        if not peril_id:
+            return None
+
+        try:
+            nonce = self.w3.eth.get_transaction_count(self.account.address, "pending")
+
+            tx = self.aggregator.functions.recordSnapshot(
+                peril_id,
+            ).build_transaction({
+                "from":     self.account.address,
+                "nonce":    nonce,
+                "gas":      150_000,
+                "maxFeePerGas":         self.w3.eth.gas_price * 2,
+                "maxPriorityFeePerGas": self.w3.to_wei(0.001, "gwei"),
+                "chainId":  self.w3.eth.chain_id,
+            })
+
+            signed = self.account.sign_transaction(tx)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            return tx_hash.hex()
+        except Exception as e:
+            log.warning(f"Oracle refresh failed for {asset}: {e}")
+            return None
