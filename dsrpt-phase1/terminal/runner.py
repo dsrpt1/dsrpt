@@ -24,6 +24,8 @@ import os
 import sys
 import time
 import argparse
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 print("[boot] starting imports...", flush=True)
 
@@ -60,7 +62,7 @@ print("[boot] db ok", flush=True)
 
 POLL_INTERVAL_SECONDS = 900    # 15 minutes
 WINDOW_HOURS          = 48
-WARMUP_HOURS          = 4
+WARMUP_HOURS          = 1      # reduced from 4h — enough for initial classification
 
 ASSETS = {
     "USDC": {"binance": "USDCUSDT", "kraken": "USDCUSD", "coingecko": "usd-coin"},
@@ -301,10 +303,34 @@ class AssetMonitor:
 
 
 # ─────────────────────────────────────────────
+# Health check server (keeps Railway from killing the container)
+# ─────────────────────────────────────────────
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status":"ok","service":"dsrpt-signal-engine"}')
+
+    def log_message(self, format, *args):
+        pass  # suppress request logs
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    print(f"Health server: listening on port {port}", flush=True)
+
+
+# ─────────────────────────────────────────────
 # Main loop
 # ─────────────────────────────────────────────
 
 def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_INTERVAL_SECONDS):
+    # Start health check server for Railway
+    start_health_server()
     # Initialize chain relay and database (no-op if env vars missing)
     relay = ChainRelay()
     db = SignalDB()
