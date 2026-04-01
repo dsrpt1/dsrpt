@@ -1,24 +1,23 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-// All routes are public until Clerk is properly configured.
-// To enable auth gating, move routes from publicRoutes to protectedRoutes.
+// Public routes — accessible without login
 const isPublicRoute = createRouteMatcher([
-  '/(.*)',
+  '/',
+  '/whitepaper',
+  '/how-it-works',
+  '/team',
+  '/pricing',
+  '/api-docs',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/api/v1/signals/market',   // free: composite market signal
+  '/api/webhook',             // Stripe webhook (no auth)
 ])
 
-// These routes will require auth once Clerk is configured:
-// const isProtectedRoute = createRouteMatcher([
-//   '/monitor',
-//   '/api/v1/signals/assets',
-//   '/api/v1/alerts',
-//   '/api/v1/history',
-// ])
-
 export default clerkMiddleware(async (auth, req) => {
-  // Uncomment to enable auth gating:
-  // if (isProtectedRoute(req)) {
-  //   await auth.protect()
-  // }
+  if (!isPublicRoute(req)) {
+    await auth.protect()
+  }
 })
 
 export const config = {
