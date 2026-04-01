@@ -10,10 +10,17 @@ type Props = {
   onClose: () => void
 }
 
-const ASSET_OPTIONS = [
+type AssetOption = {
+  label: string
+  value: string
+  perilId: string
+  minPremium: string
+}
+
+const ASSET_OPTIONS: AssetOption[] = [
   { label: 'USDC', value: 'usdc', perilId: PERIL_IDS.USDC_DEPEG, minPremium: '0.25%' },
   { label: 'USDT', value: 'usdt', perilId: PERIL_IDS.USDT_DEPEG, minPremium: '0.30%' },
-] as const
+]
 
 const DURATION_OPTIONS = [
   { label: '7 days', value: 7 },
