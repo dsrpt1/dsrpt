@@ -189,6 +189,7 @@ class AssetMonitor:
         self.engine    = SignalEngine(asset=asset)
         self.prev_regime = None
         self.tick_count  = 0
+        self.last_alert_regime = None  # track what we last alerted on
 
     def process_tick(self, price: float, volume: float, timestamp: datetime):
         self.tick_count += 1
@@ -234,6 +235,27 @@ class AssetMonitor:
         if sig and sig.signal_type in ("TRANSITION", "COLDSTART", "WARNING"):
             self._send_alert(sig, result)
             self.prev_regime = regime
+            self.last_alert_regime = regime
+        # Also alert if regime is non-ambiguous and we haven't alerted on it
+        # (catches cases where COLDSTART was missed due to restart during warmup)
+        elif regime != "ambiguous" and regime != self.last_alert_regime:
+            from terminal.src.signal_engine import Signal
+            fallback_sig = Signal(
+                timestamp=timestamp,
+                asset=self.asset,
+                signal_type="TRANSITION",
+                regime=regime,
+                prev_regime=self.last_alert_regime or "ambiguous",
+                confidence=scores.get(regime, 0.5),
+                rule_fired=result.get("rule_fired", ""),
+                tail_risks={},
+                early_warnings=[],
+                current_price=price,
+                max_severity=result.get("max_severity", 0),
+                notes=result.get("notes", ""),
+            )
+            self._send_alert(fallback_sig, result)
+            self.last_alert_regime = regime
 
     def _send_alert(self, sig, result):
         """Format and send the alert."""
@@ -350,6 +372,8 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
 
     monitors = {asset: AssetMonitor(asset, token, chat_id, chain_relay=relay, db=db) for asset in assets}
     fail_counts = {asset: 0 for asset in assets}
+    last_digest = datetime.now(tz=timezone.utc)
+    digest_interval = timedelta(hours=4)
 
     while True:
         tick_start = datetime.now(tz=timezone.utc)
@@ -380,6 +404,19 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
                 tx = relay.refresh_oracle(asset)
                 if tx:
                     print(f"  Oracle refresh [{asset}]: {tx}", flush=True)
+
+        # Periodic status digest (every 4 hours)
+        if token and chat_id and (tick_start - last_digest) >= digest_interval:
+            lines = ["📊 *DSRPT STATUS DIGEST*\n"]
+            for asset_name, mon in monitors.items():
+                if mon.engine.prev_regime is not None:
+                    r = mon.engine.prev_regime
+                    lines.append(f"`{asset_name}` — {r.replace('_', ' ').upper()}")
+            lines.append(f"\n_Next digest in 4h_")
+            digest_msg = "\n".join(lines)
+            send_telegram(digest_msg, token, chat_id)
+            last_digest = tick_start
+            print("  Sent status digest to Telegram", flush=True)
 
         # Sleep until next poll
         elapsed = (datetime.now(tz=timezone.utc) - tick_start).total_seconds()
