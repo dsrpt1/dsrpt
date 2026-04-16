@@ -48,9 +48,12 @@ def compute_partial_confidence(features: RegimeFeatures) -> dict:
     f = features
 
     def sigmoid(x, center, scale=10):
+        # Guard against inf/nan inputs
+        x = float(x) if np.isfinite(x) else 0.0
         return 1.0 / (1.0 + np.exp(-scale * (x - center)))
 
     def inv_sigmoid(x, center, scale=10):
+        x = float(x) if np.isfinite(x) else 0.0
         return 1.0 / (1.0 + np.exp(scale * (x - center)))
 
     # ── Reflexive Collapse ──────────────────────────────────────────
@@ -86,11 +89,15 @@ def compute_partial_confidence(features: RegimeFeatures) -> dict:
         sigmoid(f.volume_spike_ratio,       4.00, scale=2),
     ])
 
+    def safe_round(v):
+        v = float(v)
+        return round(v, 3) if np.isfinite(v) else 0.0
+
     scores = {
-        "reflexive_collapse":    round(float(rc_score), 3),
-        "collateral_shock":      round(float(cs_score), 3),
-        "contained_stress":      round(float(ct_score), 3),
-        "liquidity_dislocation": round(float(ld_score), 3),
+        "reflexive_collapse":    safe_round(rc_score),
+        "collateral_shock":      safe_round(cs_score),
+        "contained_stress":      safe_round(ct_score),
+        "liquidity_dislocation": safe_round(ld_score),
     }
 
     return scores

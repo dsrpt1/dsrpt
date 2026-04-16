@@ -27,10 +27,13 @@ except ImportError:
 
 
 def _to_float(v) -> float:
-    """Convert numpy float64 or any numeric to plain Python float."""
+    """Convert numpy float64 or any numeric to plain Python float. Guards against NaN/inf."""
     if v is None:
         return 0.0
-    return float(v)
+    f = float(v)
+    if f != f or f == float('inf') or f == float('-inf'):  # NaN or inf
+        return 0.0
+    return f
 
 
 def _to_int(v) -> int:

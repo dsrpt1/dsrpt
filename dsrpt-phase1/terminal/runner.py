@@ -219,7 +219,9 @@ class AssetMonitor:
 
         # Persist tick to database
         if self.db:
-            conf = scores.get(regime, 0.5) if regime != "ambiguous" else 0.3
+            import math
+            raw_conf = scores.get(regime, 0.5) if regime != "ambiguous" else 0.3
+            conf = raw_conf if (isinstance(raw_conf, (int, float)) and math.isfinite(raw_conf)) else 0.0
             self.db.write_tick(
                 asset=self.asset,
                 ts=timestamp,
