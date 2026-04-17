@@ -116,10 +116,12 @@ export default function SignalChart({ symbol = 'USDC' }: { symbol?: string }) {
         title: 'Price',
       });
 
-      const priceData = data.data.map(d => ({
-        time: Math.floor(new Date(d.ts).getTime() / 1000) as import('lightweight-charts').UTCTimestamp,
-        value: d.price,
-      }));
+      const priceData = data.data
+        .filter(d => d.price != null && isFinite(d.price))
+        .map(d => ({
+          time: Math.floor(new Date(d.ts).getTime() / 1000) as import('lightweight-charts').UTCTimestamp,
+          value: d.price,
+        }));
       priceSeries.setData(priceData);
 
       // Confidence line on separate scale
@@ -135,10 +137,12 @@ export default function SignalChart({ symbol = 'USDC' }: { symbol?: string }) {
         scaleMargins: { top: 0.7, bottom: 0 },
       });
 
-      const confData = data.data.map(d => ({
-        time: Math.floor(new Date(d.ts).getTime() / 1000) as import('lightweight-charts').UTCTimestamp,
-        value: d.confidence * 100,
-      }));
+      const confData = data.data
+        .filter(d => d.confidence != null && isFinite(d.confidence))
+        .map(d => ({
+          time: Math.floor(new Date(d.ts).getTime() / 1000) as import('lightweight-charts').UTCTimestamp,
+          value: d.confidence * 100,
+        }));
       confSeries.setData(confData);
 
       // Event markers on price line
