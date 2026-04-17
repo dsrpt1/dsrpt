@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useReadContract } from 'wagmi';
 import { ADDRESSES } from '@/lib/addresses';
 import { ORACLE_ADAPTER_ABI } from '@/lib/abis';
@@ -7,36 +8,52 @@ import { ORACLE_ADAPTER_ABI } from '@/lib/abis';
 const USDC = ADDRESSES.base.usdc as `0x${string}`;
 const ADAPTER = ADDRESSES.base.oracleAdapter as `0x${string}`;
 
-const SIGNAL_REGIMES = ['AMBIGUOUS', 'CONTAINED STRESS', 'LIQUIDITY DISLOCATION', 'COLLATERAL SHOCK', 'REFLEXIVE COLLAPSE'] as const;
-const SIGNAL_COLORS = ['#6b7280', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'] as const;
+const SIGNAL_REGIMES: Record<string, { label: string; color: string }> = {
+  'ambiguous':             { label: 'AMBIGUOUS',             color: '#6b7280' },
+  'contained_stress':      { label: 'CONTAINED STRESS',      color: '#3b82f6' },
+  'liquidity_dislocation': { label: 'LIQUIDITY DISLOCATION', color: '#f59e0b' },
+  'collateral_shock':      { label: 'COLLATERAL SHOCK',      color: '#f97316' },
+  'reflexive_collapse':    { label: 'REFLEXIVE COLLAPSE',    color: '#ef4444' },
+};
+
 const ESCALATION_LABELS = ['NORMAL', 'ELEVATED', 'ESCALATING', 'CRITICAL'] as const;
 const ESCALATION_COLORS = ['#22c55e', '#f59e0b', '#f97316', '#ef4444'] as const;
 
+type MarketAsset = {
+  asset: string;
+  regime: string;
+  regime_id: number;
+  confidence: number;
+  escalation: number;
+  premium_multiplier_bps: number;
+  peg_dev_bps: number;
+  price: number;
+  updated_at: string;
+};
+
+type MarketData = {
+  composite_regime: string;
+  assets: MarketAsset[];
+  updated_at: string;
+};
+
 export default function SignalPanel() {
-  const { data: regimeData } = useReadContract({
-    address: ADAPTER,
-    abi: ORACLE_ADAPTER_ABI,
-    functionName: 'getCurrentRegime',
-    args: [USDC],
-    query: { refetchInterval: 15_000 },
-  });
+  const [market, setMarket] = useState<MarketData | null>(null);
 
-  const { data: escalation } = useReadContract({
-    address: ADAPTER,
-    abi: ORACLE_ADAPTER_ABI,
-    functionName: 'getEscalationLevel',
-    args: [USDC],
-    query: { refetchInterval: 15_000 },
-  });
+  // Fetch live data from Postgres-backed API
+  useEffect(() => {
+    const fetchData = () => {
+      fetch('/api/v1/signals/market')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.assets) setMarket(data); })
+        .catch(() => {});
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 15_000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const { data: multiplier } = useReadContract({
-    address: ADAPTER,
-    abi: ORACLE_ADAPTER_ABI,
-    functionName: 'getPremiumMultiplier',
-    args: [USDC],
-    query: { refetchInterval: 15_000 },
-  });
-
+  // On-chain gates (these must come from the contract)
   const { data: issuanceAllowed } = useReadContract({
     address: ADAPTER,
     abi: ORACLE_ADAPTER_ABI,
@@ -61,17 +78,21 @@ export default function SignalPanel() {
     query: { refetchInterval: 15_000 },
   });
 
-  const regimeIndex = regimeData ? Number((regimeData as [number, bigint])[0]) : 0;
-  const confidence = regimeData ? Number((regimeData as [number, bigint])[1]) : 0;
-  const confidencePct = (confidence / 100).toFixed(1);
-  const escalationIndex = typeof escalation === 'number' ? escalation : 0;
-  const multBps = multiplier ? Number(multiplier) : 10000;
+  // Use USDC as primary display asset
+  const usdc = market?.assets?.find(a => a.asset === 'USDC');
+  const regime = usdc?.regime || 'ambiguous';
+  const regimeInfo = SIGNAL_REGIMES[regime] || SIGNAL_REGIMES['ambiguous'];
+  const confidence = usdc?.confidence ?? 0;
+  const confidencePct = (confidence * 100).toFixed(1);
+  const escalationIndex = usdc?.escalation ?? 0;
+  const multBps = usdc?.premium_multiplier_bps ?? 10000;
   const multDisplay = (multBps / 10000).toFixed(2);
   const lockupSeconds = lockupTime ? Number(lockupTime) : 0;
   const lockupHours = Math.ceil(lockupSeconds / 3600);
+  const lastUpdate = market?.updated_at
+    ? new Date(market.updated_at).toLocaleTimeString('en-US', { hour12: false })
+    : '--:--';
 
-  const regimeLabel = SIGNAL_REGIMES[regimeIndex] ?? 'AMBIGUOUS';
-  const regimeColor = SIGNAL_COLORS[regimeIndex] ?? '#6b7280';
   const escLabel = ESCALATION_LABELS[escalationIndex] ?? 'NORMAL';
   const escColor = ESCALATION_COLORS[escalationIndex] ?? '#22c55e';
 
@@ -79,23 +100,35 @@ export default function SignalPanel() {
     <section className="panel signal-panel">
       <div className="panel-header">
         <h2>Signal Engine</h2>
-        <span className="panel-badge" style={{ background: regimeColor }}>{regimeLabel}</span>
+        <span className="panel-badge" style={{ background: regimeInfo.color }}>{regimeInfo.label}</span>
       </div>
 
       <div className="signal-grid">
-        {/* Regime */}
-        <div className="signal-row">
-          <span className="signal-label">Signal Regime</span>
-          <span className="signal-value" style={{ color: regimeColor, fontWeight: 700 }}>
-            {regimeLabel}
-          </span>
-        </div>
+        {/* Per-asset regime summary */}
+        {market?.assets && market.assets.length > 0 && (
+          <>
+            {market.assets.map(a => {
+              const info = SIGNAL_REGIMES[a.regime] || SIGNAL_REGIMES['ambiguous'];
+              const conf = (a.confidence * 100).toFixed(0);
+              return (
+                <div key={a.asset} className="signal-row">
+                  <span className="signal-label">{a.asset}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: info.color, fontWeight: 600, fontSize: 12 }}>{info.label}</span>
+                    <span className="signal-value mono" style={{ fontSize: 12, color: '#9ca3af' }}>{conf}%</span>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="signal-divider" />
+          </>
+        )}
 
-        {/* Confidence */}
+        {/* Confidence (USDC primary) */}
         <div className="signal-row">
-          <span className="signal-label">Confidence</span>
+          <span className="signal-label">USDC Confidence</span>
           <div className="signal-bar-container">
-            <div className="signal-bar" style={{ width: `${confidencePct}%`, background: regimeColor }} />
+            <div className="signal-bar" style={{ width: `${confidencePct}%`, background: regimeInfo.color }} />
             <span className="signal-bar-label">{confidencePct}%</span>
           </div>
         </div>
@@ -131,11 +164,19 @@ export default function SignalPanel() {
             {withdrawalAllowed ? 'OPEN' : `LOCKED (${lockupHours}h)`}
           </span>
         </div>
+
+        <div className="signal-divider" />
+
+        {/* Last Update */}
+        <div className="signal-row">
+          <span className="signal-label">Last Update</span>
+          <span className="signal-value mono">{lastUpdate} UTC</span>
+        </div>
       </div>
 
       <div className="signal-footer">
         <span className="signal-source">
-          Source: classifier_v2 via OracleAdapter
+          Source: classifier_v2 via Postgres
         </span>
         <a
           href={`https://basescan.org/address/${ADAPTER}`}
@@ -161,6 +202,7 @@ export default function SignalPanel() {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          padding: 0 20px;
         }
         .signal-label {
           font-size: 13px;
@@ -200,7 +242,7 @@ export default function SignalPanel() {
         .signal-divider {
           height: 1px;
           background: rgba(255,255,255,0.06);
-          margin: 4px 0;
+          margin: 4px 20px;
         }
         .signal-status {
           font-size: 12px;
@@ -224,7 +266,7 @@ export default function SignalPanel() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding-top: 12px;
+          padding: 12px 20px 0;
           border-top: 1px solid rgba(255,255,255,0.06);
           margin-top: 8px;
         }
