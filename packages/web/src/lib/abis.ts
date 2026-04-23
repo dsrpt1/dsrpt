@@ -422,6 +422,170 @@ export const ERC20_ABI = [
   },
 ] as const
 
+// ============ Contagion Cover ABIs ============
+
+export const CONTAGION_REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'getAsset',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'token', type: 'address' },
+          { name: 'symbol', type: 'string' },
+          { name: 'backingSource', type: 'address' },
+          { name: 'verifierCardinality', type: 'uint8' },
+          { name: 'verifierThreshold', type: 'uint8' },
+          { name: 'active', type: 'bool' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getAggregateExposure',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [
+      { name: 'totalSupplyCap', type: 'uint256' },
+      { name: 'weightedLtvNotional', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getActiveListings',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [
+      {
+        name: 'active',
+        type: 'tuple[]',
+        components: [
+          { name: 'market', type: 'address' },
+          { name: 'marketName', type: 'string' },
+          { name: 'ltvBps', type: 'uint16' },
+          { name: 'supplyCap', type: 'uint256' },
+          { name: 'active', type: 'bool' },
+        ],
+      },
+      { name: 'count', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getVerifierPenalty',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: 'penaltyBps', type: 'uint16' }],
+  },
+] as const
+
+export const BACKING_RATIO_ORACLE_ABI = [
+  {
+    type: 'function',
+    name: 'getCurrentRatio',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [
+      { name: 'ratioBps', type: 'uint16' },
+      { name: 'breached', type: 'bool' },
+      { name: 'timestamp', type: 'uint32' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getDilutionDepth',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: 'dilutionBps', type: 'uint16' }],
+  },
+  {
+    type: 'function',
+    name: 'isBreached',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'breachThresholds',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'uint16' }],
+  },
+] as const
+
+export const CONTAGION_TRIGGER_ABI = [
+  {
+    type: 'function',
+    name: 'isTriggered',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'estimateTotalPayout',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: 'totalPayout', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'breachCount',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getBreachEvent',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'assetId', type: 'bytes32' },
+          { name: 'timestamp', type: 'uint32' },
+          { name: 'blockNumber', type: 'uint256' },
+          { name: 'ratioBps', type: 'uint16' },
+          { name: 'dilutionBps', type: 'uint16' },
+          { name: 'totalBacking', type: 'uint256' },
+          { name: 'totalSupply', type: 'uint256' },
+          { name: 'affectedMarkets', type: 'uint8' },
+        ],
+      },
+    ],
+  },
+] as const
+
+export const CONTAGION_PRICING_ABI = [
+  {
+    type: 'function',
+    name: 'quotePremiumSimple',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'assetId', type: 'bytes32' },
+      { name: 'notional', type: 'uint256' },
+      { name: 'durationDays', type: 'uint256' },
+    ],
+    outputs: [{ name: 'premium', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getContagionMultiplier',
+    stateMutability: 'view',
+    inputs: [{ name: 'assetId', type: 'bytes32' }],
+    outputs: [{ name: 'cm', type: 'uint256' }],
+  },
+] as const
+
 // ============ Legacy Aliases ============
 // For backward compatibility with existing code
 export const HAZARD_CURVE_ABI = HAZARD_ENGINE_ABI

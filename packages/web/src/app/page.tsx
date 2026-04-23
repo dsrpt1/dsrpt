@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navigation from '@/components/Navigation';
 import SignalChart from '@/components/SignalChart';
+import ContagionWatchlist from '@/components/ContagionWatchlist';
 
 type AssetSignal = {
   asset: string;
@@ -136,6 +137,9 @@ export default function HomePage() {
         <div className="confidence-note">
           Confidence = classification certainty. Measures how closely current trajectory features (monotonicity, recovery completeness, severity persistence) match the active regime's rule thresholds. 80%+ = high conviction.
         </div>
+
+        {/* Contagion watchlist — wrapped asset backing ratios */}
+        <ContagionWatchlist />
 
         <div className="signal-engine-status">
           <span className="pulse-dot"></span>

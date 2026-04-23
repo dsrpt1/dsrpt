@@ -35,6 +35,25 @@ export const PERIL_IDS = {
   USDT_DEPEG: '0x073146c315d13913647c4f8d0fe5ef4976515fef6adcdef2261fdb55bf15b16a',
 } as const
 
+// Contagion contracts (deployed 2026-04-23, block 45077821)
+export const CONTAGION = {
+  base: {
+    registry:       '0xcD42695b7D26e6251a12199087A0f8bE49c7e82b',
+    oracle:         '0xCe12014B3A3CA1c2D9a2cD0d23BAd94a1ead1E85',
+    trigger:        '0x8cb4756ce55a90495468C13A86f481a05A613930',
+    policyManager:  '0x5A36e58b83B4667322921759ffbC5c94d0a8Bb13',
+    pricingEngine:  '0xCe114aEB65c7df1798Da6f5071a8B6BF942dDC10',
+
+    // Wrapped assets
+    rsETH:          '0xC5DbB6F24F97e5Bc0cB0A48a0254D42070898b52',
+  },
+} as const
+
+// Contagion peril IDs
+export const CONTAGION_PERILS = {
+  RSETH: '0x7ded8ed39b342f0fcc04c181f9b970f5f519fb15e537b23d5bdfe757a1a88ee1',
+} as const
+
 // Tranche IDs for Treasury
 export const TRANCHE_IDS = {
   JUNIOR: 0,

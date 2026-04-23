@@ -6,6 +6,7 @@ import { useAccount, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import Navigation from '@/components/Navigation';
 import SignalPanel from '@/components/SignalPanel';
+import ContagionPanel from '@/components/ContagionPanel';
 import SignalChart from '@/components/SignalChart';
 import CreatePolicyModal from '@/components/CreatePolicyModal';
 import { ADDRESSES, PERIL_IDS } from '@/lib/addresses';
@@ -95,9 +96,12 @@ export default function MonitorPage() {
         <ConnectButton />
       </header>
 
-      {/* Signal Panel + Charts */}
+      {/* Signal Panel + Contagion Panel + Charts */}
       <div className="dashboard-grid" style={{ gridTemplateColumns: '340px 1fr' }}>
-        <SignalPanel />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <SignalPanel />
+          <ContagionPanel />
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <SignalChart symbol="USDC" />
@@ -153,20 +157,24 @@ export default function MonitorPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Assets</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Depeg Cover</span>
                 <span style={{ color: 'var(--text-primary)' }}>USDC, USDT</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Trigger</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Contagion Cover</span>
+                <span style={{ color: 'var(--text-primary)' }}>rsETH (Aave, Morpho)</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Depeg Trigger</span>
                 <span style={{ color: 'var(--text-primary)' }}>&lt; $0.98</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Min Premium</span>
-                <span style={{ color: 'var(--text-primary)' }}>0.25% (USDC) / 0.30% (USDT)</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Contagion Trigger</span>
+                <span style={{ color: 'var(--text-primary)' }}>R &lt; 95% backing</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Duration</span>
-                <span style={{ color: 'var(--text-primary)' }}>7 / 14 / 30 / 90 days</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Tranches</span>
+                <span style={{ color: 'var(--text-primary)' }}>Senior / Mezz / Cat</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Settlement</span>
