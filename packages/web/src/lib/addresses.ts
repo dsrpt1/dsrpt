@@ -51,8 +51,16 @@ export const CONTAGION = {
 
 // Contagion peril IDs
 export const CONTAGION_PERILS = {
-  RSETH: '0x7ded8ed39b342f0fcc04c181f9b970f5f519fb15e537b23d5bdfe757a1a88ee1',
+  RSETH:  '0x7ded8ed39b342f0fcc04c181f9b970f5f519fb15e537b23d5bdfe757a1a88ee1',
+  WSTETH: '', // set after deploy
+  CBETH:  '', // set after deploy
+  RETH:   '', // set after deploy
+  WEETH:  '', // set after deploy
 } as const
+
+export const CONTAGION_ASSETS = [
+  { symbol: 'rsETH',  perilId: CONTAGION_PERILS.RSETH, source: 'Kelp DAO',    verifiers: '2-of-3' },
+] as const
 
 // Tranche IDs for Treasury
 export const TRANCHE_IDS = {
