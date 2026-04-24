@@ -9,6 +9,7 @@ import SignalPanel from '@/components/SignalPanel';
 import ContagionPanel from '@/components/ContagionPanel';
 import SignalChart from '@/components/SignalChart';
 import CreatePolicyModal from '@/components/CreatePolicyModal';
+import CreateContagionPolicyModal from '@/components/CreateContagionPolicyModal';
 import { ADDRESSES, PERIL_IDS } from '@/lib/addresses';
 import { HAZARD_ENGINE_ABI, ORACLE_AGGREGATOR_ABI } from '@/lib/abis';
 
@@ -18,6 +19,7 @@ export default function MonitorPage() {
   const { isConnected } = useAccount();
   const [currentTime, setCurrentTime] = useState<string>('');
   const [createPolicyOpen, setCreatePolicyOpen] = useState(false);
+  const [contagionPolicyOpen, setContagionPolicyOpen] = useState(false);
 
   const { data: currentRegime } = useReadContract({
     address: ADDRESSES.base.hazardEngine as `0x${string}`,
@@ -145,6 +147,34 @@ export default function MonitorPage() {
             </div>
           </button>
 
+          {/* Buy Contagion Cover */}
+          <button
+            className={`action-card ${isConnected ? 'active' : 'disabled'}`}
+            onClick={() => setContagionPolicyOpen(true)}
+            disabled={!isConnected}
+            style={{ textAlign: 'left', cursor: isConnected ? 'pointer' : 'default' }}
+          >
+            <div className="action-icon" style={{ background: 'rgba(168,85,247,0.1)', color: '#a855f7' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M12 8v4M12 16h.01"/>
+              </svg>
+            </div>
+            <div className="action-content">
+              <span className="action-title">Buy Contagion Cover</span>
+              <span className="action-desc">
+                {isConnected
+                  ? 'rsETH, wstETH, cbETH, rETH, weETH — dilution-based parametric payout'
+                  : 'Connect wallet to access risk products'}
+              </span>
+            </div>
+            <div className="action-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </button>
+
           {/* Coverage info */}
           <div style={{
             padding: '20px',
@@ -212,8 +242,9 @@ export default function MonitorPage() {
         </div>
       </footer>
 
-      {/* Policy Modal */}
+      {/* Policy Modals */}
       <CreatePolicyModal isOpen={createPolicyOpen} onClose={() => setCreatePolicyOpen(false)} />
+      <CreateContagionPolicyModal isOpen={contagionPolicyOpen} onClose={() => setContagionPolicyOpen(false)} />
     </main>
   );
 }
