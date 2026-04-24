@@ -50,12 +50,13 @@ WRAPPED_TOKENS_BASE = {
 }
 
 # Ethereum L1
+# All LSTs use exchange rate approach: backing = supply * exchangeRate
+# This avoids needing protocol-specific deposit pool queries
 L1_CONTRACTS = {
     "rsETH": {
-        "deposit_pool": "0x036676389e48133B63a802f8635AD39E752D375D",  # Kelp LRTDepositPool
+        "token": "0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7",        # rsETH on L1 (Kelp)
     },
     "wstETH": {
-        "steth": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",        # Lido stETH
         "wsteth": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",       # wstETH on L1
     },
     "cbETH": {
@@ -65,8 +66,7 @@ L1_CONTRACTS = {
         "reth": "0xae78736Cd615f374D3085123A210448E74Fc6393",         # Rocket Pool rETH L1
     },
     "weETH": {
-        "liquidity_pool": "0x308861A430be4cce5502d0A12724771Fc6DaF216", # ether.fi LiquidityPool
-        "eeth": "0x35fA164735182de50811E8e2E824cFb9B6118ac2",          # eETH on L1
+        "weeth": "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",        # weETH on L1 (ether.fi)
     },
 }
 
@@ -83,20 +83,14 @@ CONTAGION_PERIL_IDS = {
 
 ERC20_TOTAL_SUPPLY_ABI = [{"type": "function", "name": "totalSupply", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
 
-KELP_DEPOSIT_POOL_ABI = [{"type": "function", "name": "getTotalAssetDeposits", "stateMutability": "view", "inputs": [{"name": "asset", "type": "address"}], "outputs": [{"type": "uint256"}]}]
-
-STETH_ABI = [{"type": "function", "name": "getTotalPooledEther", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
-
-WSTETH_ABI = [{"type": "function", "name": "stEthPerToken", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
-
-CBETH_ABI = [{"type": "function", "name": "exchangeRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
-
-RETH_ABI = [
-    {"type": "function", "name": "getExchangeRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]},
-    {"type": "function", "name": "getTotalCollateral", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]},
-]
-
-EETH_ABI = [{"type": "function", "name": "totalSupply", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
+# Exchange rate functions per asset — returns ETH per 1 wrapped token (18 decimals)
+EXCHANGE_RATE_CONFIG = {
+    "rsETH":  {"fn": "rsETHPrice",      "abi": [{"type": "function", "name": "rsETHPrice", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]},
+    "wstETH": {"fn": "stEthPerToken",   "abi": [{"type": "function", "name": "stEthPerToken", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]},
+    "cbETH":  {"fn": "exchangeRate",    "abi": [{"type": "function", "name": "exchangeRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]},
+    "rETH":   {"fn": "getExchangeRate", "abi": [{"type": "function", "name": "getExchangeRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]},
+    "weETH":  {"fn": "getRate",         "abi": [{"type": "function", "name": "getRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]},
+}
 
 CONTAGION_TRIGGER_ABI = [
     {
@@ -111,11 +105,6 @@ CONTAGION_TRIGGER_ABI = [
         "outputs": [{"name": "triggered", "type": "bool"}],
     },
 ]
-
-# ETH address used for Kelp deposit queries
-WETH_L1 = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-STETH_L1 = "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"
-
 
 class BackingOracle:
     """Fetches backing ratios from L1 + Base, pushes to ContagionTrigger."""
@@ -207,87 +196,36 @@ class BackingOracle:
         return total_backing, total_supply
 
     def _fetch_l1_backing(self, symbol: str, total_supply: int) -> int:
-        """Fetch backing from L1. Falls back to 1:1 if L1 RPC not available."""
+        """Fetch backing from L1 using exchange rate. Falls back to 1:1 if unavailable.
 
+        All LSTs use the same pattern: backing = supply * exchangeRate / 1e18.
+        The exchange rate tells us how much underlying ETH 1 wrapped token is worth.
+        If rate > 1.0, the token has accrued staking rewards (normal, not a breach).
+        If rate < 1.0, the token is underbacked (breach territory).
+        """
         if not self.w3_l1:
-            # No L1 RPC — assume 1:1 backing (conservative)
+            return total_supply  # no L1 RPC — assume 1:1
+
+        config = EXCHANGE_RATE_CONFIG.get(symbol)
+        if not config:
+            return total_supply
+
+        # Get the L1 contract address
+        l1_addrs = L1_CONTRACTS.get(symbol, {})
+        l1_addr = list(l1_addrs.values())[0] if l1_addrs else None
+        if not l1_addr:
             return total_supply
 
         try:
-            if symbol == "rsETH":
-                return self._fetch_rseth_backing()
-            elif symbol == "wstETH":
-                return self._fetch_wsteth_backing(total_supply)
-            elif symbol == "cbETH":
-                return self._fetch_cbeth_backing(total_supply)
-            elif symbol == "rETH":
-                return self._fetch_reth_backing(total_supply)
-            elif symbol == "weETH":
-                return self._fetch_weeth_backing(total_supply)
+            contract = self.w3_l1.eth.contract(
+                address=Web3.to_checksum_address(l1_addr),
+                abi=config["abi"],
+            )
+            rate = contract.functions[config["fn"]]().call()
+            return (total_supply * rate) // (10 ** 18)
         except Exception as e:
-            log.warning(f"  [{symbol}] L1 query failed: {e} — using 1:1 fallback")
-
-        return total_supply  # fallback: assume fully backed
-
-    def _fetch_rseth_backing(self) -> int:
-        """Kelp rsETH: sum of ETH + stETH deposits in LRTDepositPool."""
-        addr = L1_CONTRACTS["rsETH"]["deposit_pool"]
-        pool = self.w3_l1.eth.contract(
-            address=Web3.to_checksum_address(addr),
-            abi=KELP_DEPOSIT_POOL_ABI,
-        )
-        # Query ETH deposits
-        eth_deposits = pool.functions.getTotalAssetDeposits(
-            Web3.to_checksum_address(WETH_L1)
-        ).call()
-        # Query stETH deposits
-        steth_deposits = pool.functions.getTotalAssetDeposits(
-            Web3.to_checksum_address(STETH_L1)
-        ).call()
-        return eth_deposits + steth_deposits
-
-    def _fetch_wsteth_backing(self, base_supply: int) -> int:
-        """Lido wstETH: backing = base_supply * stEthPerToken (exchange rate)."""
-        addr = L1_CONTRACTS["wstETH"]["wsteth"]
-        wsteth = self.w3_l1.eth.contract(
-            address=Web3.to_checksum_address(addr),
-            abi=WSTETH_ABI,
-        )
-        # stEthPerToken returns how much stETH 1 wstETH is worth (18 decimals)
-        rate = wsteth.functions.stEthPerToken().call()
-        # Backing = supply * rate / 1e18
-        return (base_supply * rate) // (10 ** 18)
-
-    def _fetch_cbeth_backing(self, base_supply: int) -> int:
-        """Coinbase cbETH: backing = base_supply * exchangeRate."""
-        addr = L1_CONTRACTS["cbETH"]["cbeth"]
-        cbeth = self.w3_l1.eth.contract(
-            address=Web3.to_checksum_address(addr),
-            abi=CBETH_ABI,
-        )
-        rate = cbeth.functions.exchangeRate().call()
-        return (base_supply * rate) // (10 ** 18)
-
-    def _fetch_reth_backing(self, base_supply: int) -> int:
-        """Rocket Pool rETH: backing = base_supply * exchangeRate.
-        getTotalCollateral returns only contract balance (for withdrawals),
-        not total staked ETH. Use exchange rate like other LSTs."""
-        addr = L1_CONTRACTS["rETH"]["reth"]
-        reth = self.w3_l1.eth.contract(
-            address=Web3.to_checksum_address(addr),
-            abi=RETH_ABI,
-        )
-        rate = reth.functions.getExchangeRate().call()
-        return (base_supply * rate) // (10 ** 18)
-
-    def _fetch_weeth_backing(self, base_supply: int) -> int:
-        """ether.fi weETH: eETH totalSupply on L1 as proxy for backing."""
-        addr = L1_CONTRACTS["weETH"]["eeth"]
-        eeth = self.w3_l1.eth.contract(
-            address=Web3.to_checksum_address(addr),
-            abi=EETH_ABI,
-        )
-        return eeth.functions.totalSupply().call()
+            log.warning(f"  [{symbol}] L1 exchange rate query failed: {e} — using 1:1 fallback")
+            return total_supply
 
     def _push_ratio(self, symbol: str, total_backing: int, total_supply: int) -> bool:
         """Push ratio to ContagionTrigger.pushAndTrigger() on Base."""
