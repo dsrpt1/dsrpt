@@ -299,9 +299,12 @@ class AssetMonitor:
         else:
             print("  (Telegram not configured — console only)")
 
-        # On-chain relay: submit regime update to OracleAdapter
+        # On-chain relay: only submit for genuine regime TRANSITIONS
+        # COLDSTART and WARNING should NOT trigger on-chain updates because:
+        # - COLDSTART fires on every engine restart (resets 72h LP lockup)
+        # - WARNING is a pre-signal, not a confirmed regime change
         tx_hash = None
-        if self.chain_relay:
+        if self.chain_relay and sig.signal_type == "TRANSITION":
             tx_hash = self.chain_relay.relay(
                 asset=self.asset,
                 regime=regime,
@@ -313,6 +316,8 @@ class AssetMonitor:
                 print(f"  Chain relay: tx {tx_hash}")
             else:
                 print("  Chain relay: skipped or failed")
+        elif self.chain_relay:
+            print(f"  Chain relay: skipped ({sig.signal_type} — no on-chain update)")
 
         # Persist alert to database
         if self.db:
