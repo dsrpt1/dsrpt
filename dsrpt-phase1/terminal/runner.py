@@ -52,6 +52,7 @@ from terminal.src.chain_relay import ChainRelay
 print("[boot] chain_relay ok", flush=True)
 
 from terminal.src.db import SignalDB
+from terminal.src.backing_oracle import BackingOracle
 
 print("[boot] db ok", flush=True)
 
@@ -362,6 +363,7 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
     # Initialize chain relay and database (no-op if env vars missing)
     relay = ChainRelay()
     db = SignalDB()
+    backing = BackingOracle()
 
     print("\n" + "="*56, flush=True)
     print("DSRPT TERMINAL — LIVE MONITOR", flush=True)
@@ -370,6 +372,7 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
     print(f"Telegram: {'configured' if token else 'not configured (console only)'}", flush=True)
     print(f"Chain relay: {'online' if relay.enabled else 'not configured'}", flush=True)
     print(f"Database: {'connected' if db.enabled else 'not configured'}", flush=True)
+    print(f"Backing oracle: {'online' if backing.enabled else 'not configured'}", flush=True)
     print(f"DATABASE_URL set: {bool(os.environ.get('DATABASE_URL', ''))}", flush=True)
     print("="*56 + "\n", flush=True)
 
@@ -410,6 +413,11 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
                 tx = relay.refresh_oracle(asset)
                 if tx:
                     print(f"  Oracle refresh [{asset}]: {tx}", flush=True)
+
+        # Refresh backing ratios for wrapped assets (contagion cover)
+        if backing.enabled:
+            print("  Refreshing backing ratios...", flush=True)
+            backing.refresh_all()
 
         # Periodic status digest (every 4 hours)
         if token and chat_id and (tick_start - last_digest) >= digest_interval:
