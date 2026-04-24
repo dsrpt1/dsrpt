@@ -91,7 +91,10 @@ WSTETH_ABI = [{"type": "function", "name": "stEthPerToken", "stateMutability": "
 
 CBETH_ABI = [{"type": "function", "name": "exchangeRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
 
-RETH_ABI = [{"type": "function", "name": "getTotalCollateral", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
+RETH_ABI = [
+    {"type": "function", "name": "getExchangeRate", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]},
+    {"type": "function", "name": "getTotalCollateral", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]},
+]
 
 EETH_ABI = [{"type": "function", "name": "totalSupply", "stateMutability": "view", "inputs": [], "outputs": [{"type": "uint256"}]}]
 
@@ -258,13 +261,16 @@ class BackingOracle:
         return (base_supply * rate) // (10 ** 18)
 
     def _fetch_reth_backing(self, base_supply: int) -> int:
-        """Rocket Pool rETH: getTotalCollateral on L1."""
+        """Rocket Pool rETH: backing = base_supply * exchangeRate.
+        getTotalCollateral returns only contract balance (for withdrawals),
+        not total staked ETH. Use exchange rate like other LSTs."""
         addr = L1_CONTRACTS["rETH"]["reth"]
         reth = self.w3_l1.eth.contract(
             address=Web3.to_checksum_address(addr),
             abi=RETH_ABI,
         )
-        return reth.functions.getTotalCollateral().call()
+        rate = reth.functions.getExchangeRate().call()
+        return (base_supply * rate) // (10 ** 18)
 
     def _fetch_weeth_backing(self, base_supply: int) -> int:
         """ether.fi weETH: eETH totalSupply on L1 as proxy for backing."""
@@ -298,7 +304,9 @@ class BackingOracle:
             })
 
             signed = self.account.sign_transaction(tx)
-            tx_hash = self.w3_base.eth.send_raw_transaction(signed.raw_transaction)
+            # web3.py v6 uses rawTransaction, v7 uses raw_transaction
+            raw = getattr(signed, 'raw_transaction', None) or getattr(signed, 'rawTransaction', None)
+            tx_hash = self.w3_base.eth.send_raw_transaction(raw)
             log.info(f"  [{symbol}] pushed ratio: tx={tx_hash.hex()}")
 
             # Check return value: true = breach triggered

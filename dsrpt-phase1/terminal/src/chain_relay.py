@@ -236,7 +236,8 @@ class ChainRelay:
         })
 
         signed = self.account.sign_transaction(tx)
-        tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        raw = getattr(signed, 'raw_transaction', None) or getattr(signed, 'rawTransaction', None)
+        tx_hash = self.w3.eth.send_raw_transaction(raw)
         return tx_hash.hex()
 
     def refresh_oracle(self, asset: str) -> Optional[str]:
@@ -266,7 +267,8 @@ class ChainRelay:
             })
 
             signed = self.account.sign_transaction(tx)
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            raw = getattr(signed, 'raw_transaction', None) or getattr(signed, 'rawTransaction', None)
+        tx_hash = self.w3.eth.send_raw_transaction(raw)
             return tx_hash.hex()
         except Exception as e:
             log.warning(f"Oracle refresh failed for {asset}: {e}")
