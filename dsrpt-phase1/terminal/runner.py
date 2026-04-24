@@ -409,6 +409,7 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
 
         # Refresh on-chain oracle snapshots (Chainlink price data)
         if relay.enabled:
+            relay.sync_nonce()  # resync before batch pushes
             for asset in ["USDC", "USDT"]:
                 tx = relay.refresh_oracle(asset)
                 if tx:

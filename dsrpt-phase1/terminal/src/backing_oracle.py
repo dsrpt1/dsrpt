@@ -126,6 +126,7 @@ class BackingOracle:
         self.w3_l1 = None
         self.account = None
         self.trigger_contract = None
+        self._nonce = None  # locally tracked nonce
 
         rpc_base = os.environ.get("DSRPT_RPC_URL", "")
         rpc_l1 = os.environ.get("DSRPT_L1_RPC_URL", "")
@@ -160,6 +161,13 @@ class BackingOracle:
     def refresh_all(self):
         """Fetch backing ratios for all wrapped assets and push to chain."""
         if not self.enabled:
+            return
+
+        # Resync nonce from chain at start of each batch
+        try:
+            self._nonce = self.w3_base.eth.get_transaction_count(self.account.address, "pending")
+        except Exception as e:
+            log.warning(f"BackingOracle: nonce fetch failed: {e}")
             return
 
         for symbol in CONTAGION_PERIL_IDS:
@@ -288,7 +296,8 @@ class BackingOracle:
             return False
 
         try:
-            nonce = self.w3_base.eth.get_transaction_count(self.account.address, "pending")
+            if self._nonce is None:
+                self._nonce = self.w3_base.eth.get_transaction_count(self.account.address, "pending")
 
             tx = self.trigger_contract.functions.pushAndTrigger(
                 peril_id,
@@ -296,7 +305,7 @@ class BackingOracle:
                 total_supply,
             ).build_transaction({
                 "from": self.account.address,
-                "nonce": nonce,
+                "nonce": self._nonce,
                 "gas": 200_000,
                 "maxFeePerGas": self.w3_base.eth.gas_price * 2,
                 "maxPriorityFeePerGas": self.w3_base.to_wei(0.001, "gwei"),
@@ -307,11 +316,14 @@ class BackingOracle:
             # web3.py v6 uses rawTransaction, v7 uses raw_transaction
             raw = getattr(signed, 'raw_transaction', None) or getattr(signed, 'rawTransaction', None)
             tx_hash = self.w3_base.eth.send_raw_transaction(raw)
+            self._nonce += 1  # increment for next push
             log.info(f"  [{symbol}] pushed ratio: tx={tx_hash.hex()}")
-
-            # Check return value: true = breach triggered
-            # We can't read return value from send, but the event will tell us
             return False
         except Exception as e:
             log.warning(f"  [{symbol}] push failed: {e}")
+            # On failure, resync nonce from chain
+            try:
+                self._nonce = self.w3_base.eth.get_transaction_count(self.account.address, "pending")
+            except Exception:
+                pass
             return False

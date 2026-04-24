@@ -93,6 +93,7 @@ class ChainRelay:
         self.contract = None
         self.adapter_address = None
         self.last_tx_hash = None
+        self._nonce = None  # locally tracked nonce for batch operations
 
         rpc_url = os.environ.get("DSRPT_RPC_URL", "")
         relayer_key = os.environ.get("DSRPT_RELAYER_KEY", "")
@@ -253,13 +254,15 @@ class ChainRelay:
             return None
 
         try:
-            nonce = self.w3.eth.get_transaction_count(self.account.address, "pending")
+            # Use local nonce if set, else fetch fresh
+            if self._nonce is None:
+                self._nonce = self.w3.eth.get_transaction_count(self.account.address, "pending")
 
             tx = self.aggregator.functions.recordSnapshot(
                 peril_id,
             ).build_transaction({
                 "from":     self.account.address,
-                "nonce":    nonce,
+                "nonce":    self._nonce,
                 "gas":      150_000,
                 "maxFeePerGas":         self.w3.eth.gas_price * 2,
                 "maxPriorityFeePerGas": self.w3.to_wei(0.001, "gwei"),
@@ -269,7 +272,20 @@ class ChainRelay:
             signed = self.account.sign_transaction(tx)
             raw = getattr(signed, 'raw_transaction', None) or getattr(signed, 'rawTransaction', None)
             tx_hash = self.w3.eth.send_raw_transaction(raw)
+            self._nonce += 1
             return tx_hash.hex()
         except Exception as e:
             log.warning(f"Oracle refresh failed for {asset}: {e}")
+            # Resync nonce on failure
+            try:
+                self._nonce = self.w3.eth.get_transaction_count(self.account.address, "pending")
+            except Exception:
+                pass
             return None
+
+    def sync_nonce(self):
+        """Call at the start of a batch operation to resync from chain."""
+        try:
+            self._nonce = self.w3.eth.get_transaction_count(self.account.address, "pending")
+        except Exception as e:
+            log.warning(f"Nonce sync failed: {e}")
