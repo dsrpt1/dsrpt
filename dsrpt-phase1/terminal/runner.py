@@ -409,18 +409,18 @@ def run(assets: list, token: str = "", chat_id: str = "", interval: int = POLL_I
 
         # Refresh on-chain oracle snapshots (Chainlink price data)
         if relay.enabled:
-            relay.sync_nonce()  # resync before batch pushes
+            relay.sync_nonce()
             for asset in ["USDC", "USDT"]:
                 tx = relay.refresh_oracle(asset)
                 if tx:
                     print(f"  Oracle refresh [{asset}]: {tx}", flush=True)
 
         # Refresh backing ratios for wrapped assets (contagion cover)
-        # Pass relay's nonce so backing oracle continues from the same counter
+        # Wait briefly for relay txs to settle, then resync nonce from chain
         if backing.enabled:
+            time.sleep(3)  # let relay txs propagate to mempool
+            backing._nonce = None  # force fresh nonce from chain
             print("  Refreshing backing ratios...", flush=True)
-            if relay.enabled and relay._nonce is not None:
-                backing._nonce = relay._nonce
             backing.refresh_all()
 
         # Periodic status digest (every 4 hours)

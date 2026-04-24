@@ -54,7 +54,7 @@ WRAPPED_TOKENS_BASE = {
 # This avoids needing protocol-specific deposit pool queries
 L1_CONTRACTS = {
     "rsETH": {
-        "token": "0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7",        # rsETH on L1 (Kelp)
+        "oracle": "0x349A73444b1a49dE9E335d7C37D22A1DcE7e2F3e",        # Kelp LRTOracle on L1
     },
     "wstETH": {
         "wsteth": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",       # wstETH on L1
