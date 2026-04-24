@@ -25,7 +25,7 @@ type Listing = {
 };
 
 export default function ContagionPanel() {
-  const [selected, setSelected] = useState(CONTAGION_ASSETS[0].symbol);
+  const [selected, setSelected] = useState<string>(CONTAGION_ASSETS[0].symbol);
   const asset = CONTAGION_ASSETS.find(a => a.symbol === selected) ?? CONTAGION_ASSETS[0];
   const perilId = asset.perilId as `0x${string}`;
 
