@@ -2,7 +2,7 @@
 
 import { useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
-import { CONTAGION, CONTAGION_PERILS } from '@/lib/addresses';
+import { CONTAGION, CONTAGION_ASSETS } from '@/lib/addresses';
 import {
   CONTAGION_REGISTRY_ABI,
   BACKING_RATIO_ORACLE_ABI,
@@ -12,48 +12,65 @@ import {
 const ORACLE = CONTAGION.base.oracle as `0x${string}`;
 const REGISTRY = CONTAGION.base.registry as `0x${string}`;
 const TRIGGER = CONTAGION.base.trigger as `0x${string}`;
-const RSETH_PERIL = CONTAGION_PERILS.RSETH as `0x${string}`;
 
 export default function ContagionWatchlist() {
+  // Build one batch of contracts reads — 3 reads per asset
+  const contracts = CONTAGION_ASSETS.flatMap(a => [
+    {
+      address: ORACLE,
+      abi: BACKING_RATIO_ORACLE_ABI,
+      functionName: 'getCurrentRatio' as const,
+      args: [a.perilId as `0x${string}`] as const,
+    },
+    {
+      address: REGISTRY,
+      abi: CONTAGION_REGISTRY_ABI,
+      functionName: 'getAggregateExposure' as const,
+      args: [a.perilId as `0x${string}`] as const,
+    },
+    {
+      address: TRIGGER,
+      abi: CONTAGION_TRIGGER_ABI,
+      functionName: 'isTriggered' as const,
+      args: [a.perilId as `0x${string}`] as const,
+    },
+  ]);
+
   const { data } = useReadContracts({
-    contracts: [
-      {
-        address: ORACLE,
-        abi: BACKING_RATIO_ORACLE_ABI,
-        functionName: 'getCurrentRatio',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: REGISTRY,
-        abi: CONTAGION_REGISTRY_ABI,
-        functionName: 'getAggregateExposure',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: TRIGGER,
-        abi: CONTAGION_TRIGGER_ABI,
-        functionName: 'isTriggered',
-        args: [RSETH_PERIL],
-      },
-    ],
+    contracts,
     query: { refetchInterval: 30_000 },
   });
 
-  const ratio = data?.[0]?.result as readonly [number, boolean, number] | undefined;
-  const exposure = data?.[1]?.result as readonly [bigint, bigint] | undefined;
-  const isTriggered = data?.[2]?.result as boolean | undefined;
+  const rows = CONTAGION_ASSETS.map((asset, i) => {
+    const base = i * 3;
+    const ratio = data?.[base]?.result as readonly [number, boolean, number] | undefined;
+    const exposure = data?.[base + 1]?.result as readonly [bigint, bigint] | undefined;
+    const isTriggered = data?.[base + 2]?.result as boolean | undefined;
 
-  const ratioBps = ratio?.[0] ?? 0;
-  const breached = ratio?.[1] ?? false;
-  const ratioDisplay = ratioBps > 0 ? `${(ratioBps / 100).toFixed(2)}%` : '--';
-  const totalSupplyCap = exposure?.[0] ?? 0n;
-  const exposureDisplay = totalSupplyCap > 0n
-    ? `$${(Number(formatUnits(totalSupplyCap, 6)) / 1e6).toFixed(0)}M`
-    : '--';
+    const ratioBps = ratio?.[0] ?? 0;
+    const breached = ratio?.[1] ?? false;
+    const totalSupplyCap = exposure?.[0] ?? 0n;
 
-  const status = isTriggered ? 'TRIGGERED' : breached ? 'BREACHED' : ratioBps > 0 ? 'STABLE' : 'NO DATA';
-  const statusClass = isTriggered ? 'critical' : breached ? 'critical' : ratioBps > 0 ? 'calm' : 'calm';
-  const action = isTriggered ? 'Settle Policies' : breached ? 'Trigger Cascade' : 'Monitor';
+    const ratioDisplay = ratioBps > 0 ? `${(ratioBps / 100).toFixed(2)}%` : '--';
+    const exposureDisplay = totalSupplyCap > 0n
+      ? `$${(Number(formatUnits(totalSupplyCap, 6)) / 1e6).toFixed(0)}M`
+      : '--';
+
+    const status = isTriggered ? 'TRIGGERED' : breached ? 'BREACHED' : ratioBps > 0 ? 'STABLE' : 'NO DATA';
+    const statusClass = isTriggered || breached ? 'critical' : 'calm';
+    const action = isTriggered ? 'Settle Policies' : breached ? 'Trigger Cascade' : 'Monitor';
+
+    return {
+      asset: asset.symbol,
+      source: asset.source,
+      verifiers: asset.verifiers,
+      ratio: ratioDisplay,
+      status,
+      statusClass,
+      exposure: exposureDisplay,
+      action,
+    };
+  });
 
   return (
     <div className="watchlist-table-wrap" style={{ marginTop: 24 }}>
@@ -66,24 +83,30 @@ export default function ContagionWatchlist() {
         <thead>
           <tr>
             <th>Asset</th>
+            <th>Source</th>
+            <th>Verifiers</th>
             <th>Backing R</th>
             <th>Status</th>
-            <th>Markets Exposure</th>
-            <th>Recommended Action</th>
+            <th>Exposure</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td className="wl-asset">rsETH</td>
-            <td className="wl-mono">{ratioDisplay}</td>
-            <td><span className={`strip-regime ${statusClass}`}>{status}</span></td>
-            <td className="wl-mono">{exposureDisplay}</td>
-            <td className="wl-action">{action}</td>
-          </tr>
+          {rows.map(r => (
+            <tr key={r.asset}>
+              <td className="wl-asset">{r.asset}</td>
+              <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.source}</td>
+              <td className="wl-mono" style={{ fontSize: 12 }}>{r.verifiers}</td>
+              <td className="wl-mono">{r.ratio}</td>
+              <td><span className={`strip-regime ${r.statusClass}`}>{r.status}</span></td>
+              <td className="wl-mono">{r.exposure}</td>
+              <td className="wl-action">{r.action}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <div className="confidence-note">
-        Backing ratio R = (bridge reserves) / (wrapped tokens in circulation). When R drops below 95%, the contagion trigger fires atomically across all referencing lending markets (Aave V3, Morpho Blue). Coverage settles at the breach block.
+        Backing ratio R = (bridge reserves) / (wrapped tokens in circulation). When R drops below 95%, the contagion trigger fires atomically across all referencing lending markets. Coverage settles at the breach block. Verifier cardinality drives the moral hazard premium — 1-of-1 (centralized) pays ~3x more than 5-of-5 (decentralized) at the same LTV.
       </div>
     </div>
   );

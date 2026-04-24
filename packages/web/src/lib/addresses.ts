@@ -49,17 +49,21 @@ export const CONTAGION = {
   },
 } as const
 
-// Contagion peril IDs
+// Contagion peril IDs (deployed on Base)
 export const CONTAGION_PERILS = {
   RSETH:  '0x7ded8ed39b342f0fcc04c181f9b970f5f519fb15e537b23d5bdfe757a1a88ee1',
-  WSTETH: '', // set after deploy
-  CBETH:  '', // set after deploy
-  RETH:   '', // set after deploy
-  WEETH:  '', // set after deploy
+  WSTETH: '0xa19e1d09b34bf5c0241806ac0e07f1790cc2c05bd25272276e9b7d880fe65f77',
+  CBETH:  '0x6c653bbe7d4e6245c1730bc8a7d8f8da21b8b52f916c7a3f02a0062c0d18b883',
+  RETH:   '0x31e7681b6e365c4ec2b461baff8cea051e565365ad6381c234feb0ab497c6d33',
+  WEETH:  '0xcaab67112643b3fcc68e249d891f71153179ea5d53c47a0a2f60183c72e4bd11',
 } as const
 
 export const CONTAGION_ASSETS = [
-  { symbol: 'rsETH',  perilId: CONTAGION_PERILS.RSETH, source: 'Kelp DAO',    verifiers: '2-of-3' },
+  { symbol: 'rsETH',  perilId: CONTAGION_PERILS.RSETH,  source: 'Kelp DAO',     verifiers: '2-of-3' },
+  { symbol: 'wstETH', perilId: CONTAGION_PERILS.WSTETH, source: 'Lido',         verifiers: '3-of-5' },
+  { symbol: 'cbETH',  perilId: CONTAGION_PERILS.CBETH,  source: 'Coinbase',     verifiers: '1-of-1' },
+  { symbol: 'rETH',   perilId: CONTAGION_PERILS.RETH,   source: 'Rocket Pool',  verifiers: '5-of-5' },
+  { symbol: 'weETH',  perilId: CONTAGION_PERILS.WEETH,  source: 'ether.fi',     verifiers: '2-of-3' },
 ] as const
 
 // Tranche IDs for Treasury

@@ -1,8 +1,9 @@
 'use client';
 
-import { useReadContract, useReadContracts } from 'wagmi';
+import { useState } from 'react';
+import { useReadContracts } from 'wagmi';
 import { formatUnits } from 'viem';
-import { CONTAGION, CONTAGION_PERILS } from '@/lib/addresses';
+import { CONTAGION, CONTAGION_ASSETS } from '@/lib/addresses';
 import {
   CONTAGION_REGISTRY_ABI,
   BACKING_RATIO_ORACLE_ABI,
@@ -15,8 +16,6 @@ const ORACLE = CONTAGION.base.oracle as `0x${string}`;
 const TRIGGER = CONTAGION.base.trigger as `0x${string}`;
 const PRICING = CONTAGION.base.pricingEngine as `0x${string}`;
 
-const RSETH_PERIL = CONTAGION_PERILS.RSETH as `0x${string}`;
-
 type Listing = {
   market: `0x${string}`;
   marketName: string;
@@ -26,57 +25,20 @@ type Listing = {
 };
 
 export default function ContagionPanel() {
-  // Read all contagion state in one batch
+  const [selected, setSelected] = useState(CONTAGION_ASSETS[0].symbol);
+  const asset = CONTAGION_ASSETS.find(a => a.symbol === selected) ?? CONTAGION_ASSETS[0];
+  const perilId = asset.perilId as `0x${string}`;
+
   const { data, isLoading } = useReadContracts({
     contracts: [
-      {
-        address: ORACLE,
-        abi: BACKING_RATIO_ORACLE_ABI,
-        functionName: 'getCurrentRatio',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: ORACLE,
-        abi: BACKING_RATIO_ORACLE_ABI,
-        functionName: 'getDilutionDepth',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: REGISTRY,
-        abi: CONTAGION_REGISTRY_ABI,
-        functionName: 'getAggregateExposure',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: REGISTRY,
-        abi: CONTAGION_REGISTRY_ABI,
-        functionName: 'getActiveListings',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: REGISTRY,
-        abi: CONTAGION_REGISTRY_ABI,
-        functionName: 'getVerifierPenalty',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: TRIGGER,
-        abi: CONTAGION_TRIGGER_ABI,
-        functionName: 'isTriggered',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: TRIGGER,
-        abi: CONTAGION_TRIGGER_ABI,
-        functionName: 'estimateTotalPayout',
-        args: [RSETH_PERIL],
-      },
-      {
-        address: PRICING,
-        abi: CONTAGION_PRICING_ABI,
-        functionName: 'getContagionMultiplier',
-        args: [RSETH_PERIL],
-      },
+      { address: ORACLE, abi: BACKING_RATIO_ORACLE_ABI, functionName: 'getCurrentRatio', args: [perilId] },
+      { address: ORACLE, abi: BACKING_RATIO_ORACLE_ABI, functionName: 'getDilutionDepth', args: [perilId] },
+      { address: REGISTRY, abi: CONTAGION_REGISTRY_ABI, functionName: 'getAggregateExposure', args: [perilId] },
+      { address: REGISTRY, abi: CONTAGION_REGISTRY_ABI, functionName: 'getActiveListings', args: [perilId] },
+      { address: REGISTRY, abi: CONTAGION_REGISTRY_ABI, functionName: 'getVerifierPenalty', args: [perilId] },
+      { address: TRIGGER, abi: CONTAGION_TRIGGER_ABI, functionName: 'isTriggered', args: [perilId] },
+      { address: TRIGGER, abi: CONTAGION_TRIGGER_ABI, functionName: 'estimateTotalPayout', args: [perilId] },
+      { address: PRICING, abi: CONTAGION_PRICING_ABI, functionName: 'getContagionMultiplier', args: [perilId] },
     ],
     query: { refetchInterval: 30_000 },
   });
@@ -111,16 +73,28 @@ export default function ContagionPanel() {
         <span className="panel-badge" style={{ background: statusColor }}>{statusLabel}</span>
       </div>
 
+      {/* Asset selector */}
+      <div className="contagion-asset-selector">
+        {CONTAGION_ASSETS.map(a => (
+          <button
+            key={a.symbol}
+            onClick={() => setSelected(a.symbol)}
+            className={`asset-tab ${selected === a.symbol ? 'active' : ''}`}
+          >
+            {a.symbol}
+          </button>
+        ))}
+      </div>
+
       <div className="contagion-grid">
         {/* Asset header */}
         <div className="contagion-asset-row">
-          <span className="contagion-asset">rsETH</span>
-          <span className="contagion-asset-source">Kelp DAO</span>
+          <span className="contagion-asset">{asset.symbol}</span>
+          <span className="contagion-asset-source">{asset.source} · {asset.verifiers}</span>
         </div>
 
         <div className="signal-divider" />
 
-        {/* Backing Ratio */}
         <div className="signal-row">
           <span className="signal-label">Backing Ratio (R)</span>
           <span className="signal-value mono" style={{ color: breached ? '#ef4444' : '#22c55e', fontWeight: 700 }}>
@@ -128,15 +102,11 @@ export default function ContagionPanel() {
           </span>
         </div>
 
-        {/* Dilution Depth */}
         <div className="signal-row">
           <span className="signal-label">Dilution Depth</span>
-          <span className="signal-value mono">
-            {isLoading ? '--' : `${dilutionPct}%`}
-          </span>
+          <span className="signal-value mono">{isLoading ? '--' : `${dilutionPct}%`}</span>
         </div>
 
-        {/* Trigger Status */}
         <div className="signal-row">
           <span className="signal-label">Trigger</span>
           <span className="signal-status" style={{ color: triggerColor, background: `${triggerColor}1a`, border: `1px solid ${triggerColor}33` }}>
@@ -146,13 +116,11 @@ export default function ContagionPanel() {
 
         <div className="signal-divider" />
 
-        {/* Affected Markets */}
         <div className="signal-row">
           <span className="signal-label">Affected Markets</span>
           <span className="signal-value mono">{listings?.[1]?.toString() ?? '0'}</span>
         </div>
 
-        {/* Total Supply Cap */}
         <div className="signal-row">
           <span className="signal-label">Total Supply Cap</span>
           <span className="signal-value mono">
@@ -160,7 +128,6 @@ export default function ContagionPanel() {
           </span>
         </div>
 
-        {/* Weighted LTV Exposure */}
         <div className="signal-row">
           <span className="signal-label">LTV Notional</span>
           <span className="signal-value mono">
@@ -168,21 +135,16 @@ export default function ContagionPanel() {
           </span>
         </div>
 
-        {/* Contagion Multiplier */}
         <div className="signal-row">
           <span className="signal-label">Contagion Multiplier</span>
-          <span className="signal-value mono" style={{ color: '#a855f7' }}>
-            {cm.toFixed(1)}x
-          </span>
+          <span className="signal-value mono" style={{ color: '#a855f7' }}>{cm.toFixed(1)}x</span>
         </div>
 
-        {/* Verifier Penalty */}
         <div className="signal-row">
           <span className="signal-label">Verifier Penalty</span>
           <span className="signal-value mono">{verifierPct}%</span>
         </div>
 
-        {/* Estimated Payout if Breached */}
         {(estimatedPayout ?? 0n) > 0n && (
           <>
             <div className="signal-divider" />
@@ -195,7 +157,6 @@ export default function ContagionPanel() {
           </>
         )}
 
-        {/* Listings detail */}
         {listings && listings[0] && listings[0].length > 0 && (
           <>
             <div className="signal-divider" />
@@ -229,6 +190,32 @@ export default function ContagionPanel() {
       <style jsx>{`
         .contagion-panel {
           grid-column: span 1;
+        }
+        .contagion-asset-selector {
+          display: flex;
+          gap: 4px;
+          padding: 12px 20px 0;
+          flex-wrap: wrap;
+        }
+        .asset-tab {
+          padding: 5px 10px;
+          font-size: 11px;
+          font-weight: 600;
+          border: 1px solid var(--border-subtle);
+          border-radius: 6px;
+          background: transparent;
+          color: var(--text-secondary);
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .asset-tab:hover {
+          border-color: rgba(0, 212, 255, 0.3);
+          color: var(--text-primary);
+        }
+        .asset-tab.active {
+          background: rgba(0, 212, 255, 0.1);
+          border-color: rgba(0, 212, 255, 0.3);
+          color: #00d4ff;
         }
         .contagion-grid {
           display: flex;
