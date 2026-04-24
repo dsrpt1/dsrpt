@@ -129,7 +129,10 @@ export default function SignalChart({ symbol = 'USDC' }: { symbol?: string }) {
         color: '#a855f7',
         lineWidth: 1,
         priceScaleId: 'confidence',
-        priceFormat: { type: 'percent', precision: 0 },
+        priceFormat: {
+          type: 'custom',
+          formatter: (v: number) => `${v.toFixed(1)}%`,
+        },
         title: 'Confidence',
       });
 

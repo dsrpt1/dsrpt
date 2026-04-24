@@ -220,7 +220,11 @@ class AssetMonitor:
         # Persist tick to database
         if self.db:
             import math
-            raw_conf = scores.get(regime, 0.5) if regime != "ambiguous" else 0.3
+            # Use the top partial score as confidence — this is the score of the
+            # regime the classifier is closest to firing. More informative than
+            # hardcoded 0.3 for ambiguous.
+            top_score = max(scores.values()) if scores else 0.0
+            raw_conf = float(top_score) if scores else 0.0
             conf = raw_conf if (isinstance(raw_conf, (int, float)) and math.isfinite(raw_conf)) else 0.0
             self.db.write_tick(
                 asset=self.asset,

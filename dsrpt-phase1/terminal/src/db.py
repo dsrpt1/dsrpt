@@ -142,6 +142,19 @@ class SignalDB:
     def _init_schema(self):
         with self.conn.cursor() as cur:
             cur.execute(SCHEMA_SQL)
+            # Clean up any NaN/bad rows from before the fix
+            try:
+                cur.execute("""
+                    DELETE FROM signal_ticks
+                    WHERE confidence = 'NaN'::double precision
+                       OR price = 'NaN'::double precision
+                       OR max_severity = 'NaN'::double precision
+                """)
+                deleted = cur.rowcount
+                if deleted > 0:
+                    log.info(f"Cleaned {deleted} NaN rows from signal_ticks")
+            except Exception:
+                pass  # table might not exist yet on first run
 
     def write_tick(
         self,
