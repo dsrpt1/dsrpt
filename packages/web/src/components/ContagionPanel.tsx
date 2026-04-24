@@ -61,8 +61,9 @@ export default function ContagionPanel() {
   const cm = contagionMultiplier ? Number(contagionMultiplier) / 100 : 0;
   const verifierPct = verifierPenalty ? (verifierPenalty / 100).toFixed(0) : '--';
 
-  const statusLabel = breached ? 'BREACHED' : 'STABLE';
-  const statusColor = breached ? '#ef4444' : '#22c55e';
+  const hasData = ratioBps > 0;
+  const statusLabel = !hasData ? 'AWAITING DATA' : breached ? 'BREACHED' : 'STABLE';
+  const statusColor = !hasData ? '#6b7280' : breached ? '#ef4444' : '#22c55e';
   const triggerLabel = isTriggered ? 'CASCADE FIRED' : 'ARMED';
   const triggerColor = isTriggered ? '#ef4444' : '#3b82f6';
 

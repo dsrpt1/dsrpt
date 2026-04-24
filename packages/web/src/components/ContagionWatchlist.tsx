@@ -50,15 +50,16 @@ export default function ContagionWatchlist() {
     const ratioBps = ratio?.[0] ?? 0;
     const breached = ratio?.[1] ?? false;
     const totalSupplyCap = exposure?.[0] ?? 0n;
+    const hasData = ratioBps > 0;
 
-    const ratioDisplay = ratioBps > 0 ? `${(ratioBps / 100).toFixed(2)}%` : '--';
+    const ratioDisplay = hasData ? `${(ratioBps / 100).toFixed(2)}%` : '--';
     const exposureDisplay = totalSupplyCap > 0n
       ? `$${(Number(formatUnits(totalSupplyCap, 6)) / 1e6).toFixed(0)}M`
       : '--';
 
-    const status = isTriggered ? 'TRIGGERED' : breached ? 'BREACHED' : ratioBps > 0 ? 'STABLE' : 'NO DATA';
-    const statusClass = isTriggered || breached ? 'critical' : 'calm';
-    const action = isTriggered ? 'Settle Policies' : breached ? 'Trigger Cascade' : 'Monitor';
+    const status = !hasData ? 'AWAITING DATA' : isTriggered ? 'TRIGGERED' : breached ? 'BREACHED' : 'STABLE';
+    const statusClass = !hasData ? 'calm' : isTriggered || breached ? 'critical' : 'calm';
+    const action = !hasData ? 'Push Ratio' : isTriggered ? 'Settle Policies' : breached ? 'Trigger Cascade' : 'Monitor';
 
     return {
       asset: asset.symbol,
