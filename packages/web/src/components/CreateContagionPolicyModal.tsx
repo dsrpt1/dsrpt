@@ -63,7 +63,7 @@ const CONTAGION_PM_ABI = [
 ] as const
 
 export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
-  const [selectedAsset, setSelectedAsset] = useState(CONTAGION_ASSETS[0])
+  const [selectedAsset, setSelectedAsset] = useState<typeof CONTAGION_ASSETS[number]>(CONTAGION_ASSETS[0])
   const [policyType, setPolicyType] = useState(POLICY_TYPES[0])
   const [tranche, setTranche] = useState(TRANCHE_OPTIONS[1]) // default mezzanine
   const [notional, setNotional] = useState('')
