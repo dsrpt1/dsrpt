@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
 import { ADDRESSES, PERIL_IDS } from '@/lib/addresses'
-import { POLICY_MANAGER_ABI, HAZARD_ENGINE_ABI, ERC20_ABI } from '@/lib/abis'
+import { POLICY_MANAGER_ABI, HAZARD_ENGINE_ABI, ERC20_ABI, FEE_ROUTER_ABI } from '@/lib/abis'
 
 type Props = {
   isOpen: boolean
@@ -39,7 +39,7 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   const [coverage, setCoverage] = useState('')
   const [selectedAsset, setSelectedAsset] = useState(ASSET_OPTIONS[0])
   const [duration, setDuration] = useState(DURATION_OPTIONS[0])
-  const [step, setStep] = useState<'input' | 'approve' | 'create'>('input')
+  const [step, setStep] = useState<'input' | 'approve' | 'fee' | 'create'>('input')
   const { address } = useAccount()
   const A = ADDRESSES.base
 
@@ -88,12 +88,35 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
   })()
 
   const usingFallback = !calculatedPremium && coverageBn > 0n
+
+  // Calculate protocol fee (20%) for display
+  const protocolFee = effectivePremium > 0n ? (effectivePremium * 2000n) / 10000n : 0n
+  const netPremium = effectivePremium - protocolFee
+
+  // User needs to approve FeeRouter for fee + PolicyManager for net premium
   const needsApproval = allowance !== undefined && effectivePremium > allowance
+
+  // Check FeeRouter allowance separately
+  const { data: feeRouterAllowance, refetch: refetchFeeAllowance } = useReadContract({
+    address: assetAddress as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: address ? [address, A.feeRouter as `0x${string}`] : undefined,
+    query: { enabled: !!address },
+  })
+
+  const needsFeeApproval = feeRouterAllowance !== undefined && protocolFee > 0n && protocolFee > feeRouterAllowance
 
   // Approve USDC
   const { writeContract: approve, data: approveTx, isPending: approving } = useWriteContract()
   const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({
     hash: approveTx,
+  })
+
+  // Fee payment transaction
+  const { writeContract: payFee, data: feeTx, isPending: payingFee } = useWriteContract()
+  const { isLoading: waitingFee, isSuccess: feeSuccess } = useWaitForTransactionReceipt({
+    hash: feeTx,
   })
 
   // Issue policy transaction
@@ -102,20 +125,36 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
     hash: policyTx,
   })
 
-  // Refetch allowance after approval
+  // Step progression
   if (approveSuccess && step === 'approve') {
     refetchAllowance()
+    refetchFeeAllowance()
+    setStep('fee')
+  }
+  if (feeSuccess && step === 'fee') {
     setStep('create')
   }
 
   const handleApprove = () => {
     if (!effectivePremium) return
     setStep('approve')
+    // Approve FeeRouter for the full premium (it takes 20% and user keeps 80% for PolicyManager)
     approve({
       address: assetAddress as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [A.policyManager as `0x${string}`, effectivePremium],
+      args: [A.feeRouter as `0x${string}`, effectivePremium],
+    })
+  }
+
+  const handlePayFee = () => {
+    if (!protocolFee || !address) return
+    setStep('fee')
+    payFee({
+      address: A.feeRouter as `0x${string}`,
+      abi: FEE_ROUTER_ABI,
+      functionName: 'collectPremium',
+      args: [address, effectivePremium, A.policyManager as `0x${string}`],
     })
   }
 
@@ -419,48 +458,56 @@ export default function CreatePolicyModal({ isOpen, onClose }: Props) {
               </div>
             )}
 
-            {/* Action Buttons */}
-            {needsApproval && !approveSuccess ? (
+            {/* Fee breakdown */}
+            {coverage && protocolFee > 0n && (
+              <div style={{ marginBottom: 16, padding: 12, background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: 8, fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Protocol fee (20%)</span>
+                  <span style={{ color: '#a855f7' }}>{formatUnits(protocolFee, 6)} {selectedAsset.label}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Net to pool (80%)</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{formatUnits(netPremium, 6)} {selectedAsset.label}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons — 3 steps: Approve → Pay Fee → Create Policy */}
+            {step === 'input' && needsApproval && !approveSuccess ? (
               <button
                 onClick={handleApprove}
                 disabled={!effectivePremium || !coverage || approving || waitingApprove}
                 style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: approving || waitingApprove
-                    ? 'rgba(168, 85, 247, 0.3)'
-                    : 'linear-gradient(135deg, rgba(168, 85, 247, 0.8) 0%, rgba(0, 212, 255, 0.8) 100%)',
-                  border: 'none',
-                  borderRadius: 12,
-                  color: '#fff',
-                  fontSize: 16,
-                  fontWeight: 600,
-                  cursor: approving || waitingApprove ? 'wait' : 'pointer',
-                  opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
+                  width: '100%', padding: '14px', border: 'none', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 600,
+                  background: approving || waitingApprove ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, rgba(168,85,247,0.8), rgba(0,212,255,0.8))',
+                  cursor: approving || waitingApprove ? 'wait' : 'pointer', opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
                 }}
               >
-                {approving || waitingApprove ? `Approving ${selectedAsset.label}...` : `Approve ${selectedAsset.label}`}
+                {approving || waitingApprove ? 'Approving...' : `1/3 — Approve ${selectedAsset.label}`}
+              </button>
+            ) : step === 'fee' || (step === 'approve' && approveSuccess) ? (
+              <button
+                onClick={handlePayFee}
+                disabled={payingFee || waitingFee}
+                style={{
+                  width: '100%', padding: '14px', border: 'none', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 600,
+                  background: payingFee || waitingFee ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, rgba(168,85,247,0.8), rgba(0,212,255,0.8))',
+                  cursor: payingFee || waitingFee ? 'wait' : 'pointer',
+                }}
+              >
+                {payingFee || waitingFee ? 'Processing fee...' : '2/3 — Pay Premium'}
               </button>
             ) : (
               <button
                 onClick={handleCreate}
                 disabled={!effectivePremium || !coverage || issuingPolicy || waitingPolicy}
                 style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: issuingPolicy || waitingPolicy
-                    ? 'rgba(0, 212, 255, 0.3)'
-                    : 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
-                  border: 'none',
-                  borderRadius: 12,
-                  color: '#fff',
-                  fontSize: 16,
-                  fontWeight: 600,
-                  cursor: issuingPolicy || waitingPolicy ? 'wait' : 'pointer',
-                  opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
+                  width: '100%', padding: '14px', border: 'none', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 600,
+                  background: issuingPolicy || waitingPolicy ? 'rgba(0,212,255,0.3)' : 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
+                  cursor: issuingPolicy || waitingPolicy ? 'wait' : 'pointer', opacity: (!effectivePremium || !coverage) ? 0.5 : 1,
                 }}
               >
-                {issuingPolicy || waitingPolicy ? 'Creating Policy...' : 'Create Policy'}
+                {issuingPolicy || waitingPolicy ? 'Creating Policy...' : '3/3 — Create Policy'}
               </button>
             )}
           </>

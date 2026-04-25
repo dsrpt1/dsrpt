@@ -21,6 +21,9 @@ export const ADDRESSES = {
     // Keeper/Ops Wallet
     keeper: '0x680d25d5EdF4ccEC25800e0FA5B1C28D377703C0',
 
+    // Protocol Fee Router
+    feeRouter: '0x1d120B0eb00Bfe67af71E7bB3c38F29cd0A5935e',
+
     // Legacy aliases (for backward compatibility)
     curve: '0x43634429c8Ff62D9808558cb150a76D32140Ba0e',  // hazardEngine
     pool: '0x540C8c83F8173AD3835eefeaAdb91fe86E7189e2',   // treasuryManager

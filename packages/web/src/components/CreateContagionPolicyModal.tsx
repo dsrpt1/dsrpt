@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
-import { CONTAGION, CONTAGION_ASSETS } from '@/lib/addresses'
-import { CONTAGION_PRICING_ABI, ERC20_ABI } from '@/lib/abis'
+import { ADDRESSES, CONTAGION, CONTAGION_ASSETS } from '@/lib/addresses'
+import { CONTAGION_PRICING_ABI, ERC20_ABI, FEE_ROUTER_ABI } from '@/lib/abis'
 
 type Props = {
   isOpen: boolean
@@ -69,7 +69,7 @@ export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
   const [notional, setNotional] = useState('')
   const [ltvBps, setLtvBps] = useState('9300')
   const [duration, setDuration] = useState(DURATION_OPTIONS[1]) // default 90d
-  const [step, setStep] = useState<'input' | 'approve' | 'create'>('input')
+  const [step, setStep] = useState<'input' | 'approve' | 'fee' | 'create'>('input')
   const { address } = useAccount()
 
   const notionalBn = notional ? parseUnits(notional, 6) : 0n
@@ -84,15 +84,19 @@ export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
   })
 
   const premium = quotedPremium ?? 0n
+  const protocolFee = premium > 0n ? (premium * 2000n) / 10000n : 0n
+  const netPremium = premium - protocolFee
   const premiumFormatted = premium > 0n ? formatUnits(premium, 6) : '0'
   const premiumPct = notionalBn > 0n ? ((Number(premium) / Number(notionalBn)) * 100).toFixed(3) : '0'
 
-  // Check USDC allowance
+  const FEE_ROUTER = ADDRESSES.base.feeRouter as `0x${string}`
+
+  // Check FeeRouter allowance
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: USDC as `0x${string}`,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: address ? [address, POLICY_MANAGER] : undefined,
+    args: address ? [address, FEE_ROUTER] : undefined,
     query: { enabled: !!address },
   })
 
@@ -102,12 +106,19 @@ export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
   const { writeContract: approve, data: approveTx, isPending: approving } = useWriteContract()
   const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTx })
 
+  // Fee payment
+  const { writeContract: payFee, data: feeTx, isPending: payingFee } = useWriteContract()
+  const { isLoading: waitingFee, isSuccess: feeSuccess } = useWaitForTransactionReceipt({ hash: feeTx })
+
   // Create policy
   const { writeContract: createPolicy, data: policyTx, isPending: creating } = useWriteContract()
   const { isLoading: waitingPolicy, isSuccess: policySuccess } = useWaitForTransactionReceipt({ hash: policyTx })
 
   if (approveSuccess && step === 'approve') {
     refetchAllowance()
+    setStep('fee' as typeof step)
+  }
+  if (feeSuccess && step === ('fee' as typeof step)) {
     setStep('create')
   }
 
@@ -118,7 +129,17 @@ export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
       address: USDC as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [POLICY_MANAGER, premium],
+      args: [FEE_ROUTER, premium],
+    })
+  }
+
+  const handlePayFee = () => {
+    if (!premium || !address) return
+    payFee({
+      address: FEE_ROUTER,
+      abi: FEE_ROUTER_ABI,
+      functionName: 'collectPremium',
+      args: [address, premium, POLICY_MANAGER],
     })
   }
 
@@ -317,14 +338,36 @@ export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
               </div>
             )}
 
-            {/* Action */}
+            {/* Fee breakdown */}
+            {notional && protocolFee > 0n && (
+              <div style={{ marginBottom: 16, padding: 12, background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: 8, fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Protocol fee (20%)</span>
+                  <span style={{ color: '#a855f7' }}>{formatUnits(protocolFee, 6)} USDC</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Net to pool (80%)</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{formatUnits(netPremium, 6)} USDC</span>
+                </div>
+              </div>
+            )}
+
+            {/* Action — 3 steps */}
             {needsApproval && !approveSuccess ? (
               <button onClick={handleApprove} disabled={!premium || !notional || approving || waitingApprove} style={{
                 width: '100%', padding: '14px', border: 'none', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 600,
                 background: approving || waitingApprove ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, rgba(168,85,247,0.8), rgba(0,212,255,0.8))',
                 cursor: approving || waitingApprove ? 'wait' : 'pointer', opacity: (!premium || !notional) ? 0.5 : 1,
               }}>
-                {approving || waitingApprove ? 'Approving USDC...' : 'Approve USDC'}
+                {approving || waitingApprove ? 'Approving...' : '1/3 — Approve USDC'}
+              </button>
+            ) : step === 'fee' || (step === 'approve' && approveSuccess) ? (
+              <button onClick={handlePayFee} disabled={payingFee || waitingFee} style={{
+                width: '100%', padding: '14px', border: 'none', borderRadius: 12, color: '#fff', fontSize: 16, fontWeight: 600,
+                background: payingFee || waitingFee ? 'rgba(168,85,247,0.3)' : 'linear-gradient(135deg, rgba(168,85,247,0.8), rgba(0,212,255,0.8))',
+                cursor: payingFee || waitingFee ? 'wait' : 'pointer',
+              }}>
+                {payingFee || waitingFee ? 'Processing fee...' : '2/3 — Pay Premium'}
               </button>
             ) : (
               <button onClick={handleCreate} disabled={!premium || !notional || creating || waitingPolicy} style={{
@@ -332,7 +375,7 @@ export default function CreateContagionPolicyModal({ isOpen, onClose }: Props) {
                 background: creating || waitingPolicy ? 'rgba(0,212,255,0.3)' : 'linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)',
                 cursor: creating || waitingPolicy ? 'wait' : 'pointer', opacity: (!premium || !notional) ? 0.5 : 1,
               }}>
-                {creating || waitingPolicy ? 'Creating Policy...' : 'Create Contagion Cover'}
+                {creating || waitingPolicy ? 'Creating Policy...' : '3/3 — Create Contagion Cover'}
               </button>
             )}
           </>

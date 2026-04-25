@@ -422,6 +422,32 @@ export const ERC20_ABI = [
   },
 ] as const
 
+// ============ Protocol Fee Router ABI ============
+
+export const FEE_ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'collectPremium',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'payer', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'destination', type: 'address' },
+    ],
+    outputs: [{ name: 'netPremium', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'calculateFee',
+    stateMutability: 'view',
+    inputs: [{ name: 'premiumAmount', type: 'uint256' }],
+    outputs: [
+      { name: 'protocolFee', type: 'uint256' },
+      { name: 'netToPool', type: 'uint256' },
+    ],
+  },
+] as const
+
 // ============ Contagion Cover ABIs ============
 
 export const CONTAGION_REGISTRY_ABI = [
